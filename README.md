@@ -131,3 +131,47 @@ for i in $(seq 1 254); do (ping -c1 -W1 192.168.16.$i >/dev/null 2>&1 && echo "1
 ```
 
 The new IP that appears is your Pi (MAC prefix `b8:27:eb` confirms it's a Raspberry Pi 3).
+
+---
+
+## Transferring Files Remotely with FileZilla (SFTP)
+
+You can upload, download, and manage files on the Pi wirelessly using **FileZilla** over SFTP — no need to remove the SD card.
+
+### 1. Install FileZilla
+Download it from [https://filezilla-project.org](https://filezilla-project.org) and install it on your computer.
+
+### 2. Open the Site Manager
+- Launch FileZilla
+- Go to **File → Site Manager** (or press `Cmd+S` on Mac)
+- Click **New Site** and name it `roboticsstartup`
+
+### 3. Enter the Connection Settings
+
+| Field      | Value                          |
+|------------|--------------------------------|
+| Protocol   | SFTP – SSH File Transfer Protocol |
+| Host       | `roboticsstartup.local`        |
+| Port       | `22`                           |
+| Logon Type | Normal                         |
+| User       | `alanacr`                      |
+| Password   | your Pi password               |
+
+### 4. Connect
+- Click **Connect**
+- Accept the host key fingerprint if prompted
+- You are now browsing the Pi's filesystem on the right panel
+
+### 5. Transfer Files
+- **Left panel** = your computer
+- **Right panel** = your Raspberry Pi
+- Drag and drop files between panels to upload or download
+- Navigate to `/home/alanacr/` to access your robot code folder
+
+### Tips
+- Make sure the Pi is **powered on and connected to Wi-Fi** before connecting
+- You can also use the IP address (`192.168.16.60`) instead of `roboticsstartup.local` if the hostname doesn't resolve
+- To quickly get to your robot code on the Pi, navigate to:
+  ```
+  /home/alanacr/robotic-startup-automated-arm-worker/robot_code/
+  ```
