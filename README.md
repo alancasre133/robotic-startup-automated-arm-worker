@@ -298,8 +298,6 @@ Python, then open the URL on any device on the same WiFi:
 python3 robot_code/camera_stream.py     # then visit http://<pi-ip>:8000
 ```
 
-Set `FLIP = False` at the top of that file if your camera is mounted upright.
-
 **Gotchas:**
 - **"No cameras available"** is almost always the **ribbon orientation** — flip
   the cable at the Pi end. Also confirm it's in the **CAMERA (CSI)** connector,
