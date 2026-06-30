@@ -275,3 +275,10 @@ Pipeline: **mic → speech-to-text → Claude (brain) → speak + act → listen
 
 Claude runs in the cloud — the Pi 3A+ can't run a large model locally, so the Pi
 captures audio, calls the API, and carries out the actions Claude chooses.
+
+---
+
+## Raspberry Pi Pico W
+
+The Pico W (flashed with MicroPython) can drive the arm's servos via PWM. Flashing
+and verifying it: [docs/pico-setup.md](docs/pico-setup.md).
