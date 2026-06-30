@@ -2,6 +2,45 @@
 
 A Raspberry Pi 3 based robotic arm project.
 
+## What works today
+
+- ✅ **Drive** — two DC motors via an L9110S driver, controlled from the Pi
+- ✅ **Camera** — IMX219: stills + a **live browser stream over WiFi** (no screen on the Pi)
+- ✅ **Reproducible** — setup steps, boot config, wiring, and code all live in this repo
+- ⏳ **Arm** — 6 servos via a PCA9685 (waiting on parts)
+- ⏳ **Voice assistant** — mic → Claude → speak / act (design + code skeleton done)
+
+## Build it from scratch
+
+Each step links to the details further down (or to a file in the repo):
+
+1. **Get the parts** — [HARDWARE.md](HARDWARE.md) (bill of materials + wiring diagram)
+2. **Flash the SD card** — see **Requirements**, then **SD Card Setup & Required Boot Fix**
+3. **First boot + connect** — see **First Boot**, then **Connecting via SSH**
+4. **Install software** — see **Software Setup**: `bash setup.sh`
+5. **Boot config** — match [config/config.txt](config/config.txt); apply steps in **Camera (IMX219)**
+6. **Wire + test motors** — see **Motors (L9110S)**, then `python3 robot_code/motor_test.py`
+7. **Test the camera** — see **Camera (IMX219)**, then `python3 robot_code/camera_test.py`
+8. **Stream the camera live** — `python3 robot_code/camera_stream.py`, then open `http://<pi-ip>:8000`
+9. *(planned)* **Arm** — [docs/pico-setup.md](docs/pico-setup.md) + [docs/voice-assistant.md](docs/voice-assistant.md)
+10. *(planned)* **Voice** — [docs/voice-assistant.md](docs/voice-assistant.md) + `robot_code/assistant.py`
+
+## Repository map
+
+| Path | What it is |
+|------|-----------|
+| `setup.sh` | One-command dependency install + camera enable |
+| `HARDWARE.md` | Parts list, prices, wiring quick-reference |
+| `config/config.txt` | Known-good `/boot/firmware/config.txt` snapshot |
+| `docs/wiring-overview.svg` | System wiring diagram |
+| `docs/voice-assistant.md` | Voice assistant design + STT/TTS options |
+| `docs/voice-pipeline.svg` | Voice pipeline diagram |
+| `docs/pico-setup.md` | Pico W MicroPython flashing |
+| `robot_code/motor_test.py` | Drive both motors (test) |
+| `robot_code/camera_test.py` | Capture a still photo |
+| `robot_code/camera_stream.py` | Live camera stream to a browser |
+| `robot_code/assistant.py` | Claude "brain" — tool-use loop (drive wired) |
+
 ---
 
 ## Requirements
@@ -251,6 +290,15 @@ scp alanacr@<pi-ip>:~/test.jpg .
 ```
 
 Or capture from Python: [robot_code/camera_test.py](robot_code/camera_test.py).
+
+**Live stream to a browser** (no screen on the Pi needed) — run it with system
+Python, then open the URL on any device on the same WiFi:
+
+```bash
+python3 robot_code/camera_stream.py     # then visit http://<pi-ip>:8000
+```
+
+Set `FLIP = False` at the top of that file if your camera is mounted upright.
 
 **Gotchas:**
 - **"No cameras available"** is almost always the **ribbon orientation** — flip
