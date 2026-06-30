@@ -189,7 +189,9 @@ bash setup.sh
 This installs the motor libraries (`gpiozero`, `lgpio`), the camera stack
 (`picamera2`, `rpicam-apps`), and enables the IMX219 camera overlay.
 
-See [HARDWARE.md](HARDWARE.md) for the full parts list and wiring diagram.
+See [HARDWARE.md](HARDWARE.md) for the full parts list and wiring diagram, and
+[config/config.txt](config/config.txt) for a known-good snapshot of the Pi's
+`/boot/firmware/config.txt`.
 
 ---
 
