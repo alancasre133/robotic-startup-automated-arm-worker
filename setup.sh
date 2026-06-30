@@ -22,8 +22,17 @@ echo "==> Installing camera stack (libcamera + picamera2)..."
 sudo apt install -y python3-picamera2 rpicam-apps
 
 echo
-echo "==> Setup complete."
+echo "==> Enabling the IMX219 camera overlay in config.txt..."
+# Confirmed-working setup for the Arducam IMX219. Harmless if no camera is
+# attached. A reversed CSI ribbon shows up as "No cameras available" — flip it.
+CONFIG=/boot/firmware/config.txt
+sudo sed -i 's/^camera_auto_detect=1/camera_auto_detect=0/' "$CONFIG"
+grep -q '^dtoverlay=imx219' "$CONFIG" || echo 'dtoverlay=imx219' | sudo tee -a "$CONFIG" >/dev/null
+echo "    Done (a reboot is required for the camera to appear)."
+
 echo
-echo "Next steps:"
-echo "  - Test the motors (wheels off the ground):  python3 robot_code/motor_test.py"
-echo "  - List the camera once attached:            rpicam-hello --list-cameras"
+echo "==> Setup complete. Reboot to load the camera:  sudo reboot"
+echo
+echo "After reboot:"
+echo "  - Verify the camera:  rpicam-hello --list-cameras   (should list imx219)"
+echo "  - Test the motors:    python3 robot_code/motor_test.py   (wheels off the ground)"

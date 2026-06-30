@@ -175,3 +175,86 @@ Download it from [https://filezilla-project.org](https://filezilla-project.org) 
   ```
   /home/alanacr/robotic-startup-automated-arm-worker/robot_code/
   ```
+
+---
+
+## Software Setup (after first boot)
+
+Once you can SSH in, install all dependencies with one command:
+
+```bash
+bash setup.sh
+```
+
+This installs the motor libraries (`gpiozero`, `lgpio`), the camera stack
+(`picamera2`, `rpicam-apps`), and enables the IMX219 camera overlay.
+
+See [HARDWARE.md](HARDWARE.md) for the full parts list and wiring diagram.
+
+---
+
+## Motors (L9110S)
+
+Two DC motors driven from the Pi GPIO through an L9110S dual H-bridge.
+
+| L9110S pin | Pi pin | GPIO |
+|------------|--------|------|
+| A-1A | 36 | GPIO16 |
+| A-1B | 38 | GPIO20 |
+| B-1A | 13 | GPIO27 |
+| B-2A | 15 | GPIO22 |
+| GND  | 6  | (ground reference) |
+
+Power: battery **+** → L9110S **VCC**; battery **−** → L9110S **GND**.
+The Pi is powered separately by a USB power bank.
+
+Test (wheels off the ground):
+
+```bash
+python3 robot_code/motor_test.py
+```
+
+**Gotcha — WiFi drops when motors run:** if the motor return current flows
+through the Pi, the surge can knock the WiFi offline (SSH "connection reset").
+Keep motor current out of the Pi — join battery **−** directly to the L9110S
+**GND**, and run only a thin reference wire from L9110S GND to the Pi's pin 6.
+Do **not** put the battery negative on a Pi GPIO pin.
+
+---
+
+## Camera (IMX219)
+
+Confirmed working with an **Arducam IMX219 (8 MP)**. The Pi already has the
+driver — no extra Arducam software is needed for the standard module.
+
+Enable it in `/boot/firmware/config.txt`:
+
+```bash
+sudo sed -i 's/^camera_auto_detect=1/camera_auto_detect=0/' /boot/firmware/config.txt
+grep -q '^dtoverlay=imx219' /boot/firmware/config.txt || echo 'dtoverlay=imx219' | sudo tee -a /boot/firmware/config.txt
+sudo reboot
+```
+
+Verify and capture:
+
+```bash
+rpicam-hello --list-cameras                                   # should list: imx219
+rpicam-jpeg -o ~/test.jpg -t 2000 -n --width 1920 --height 1080
+```
+
+Copy the photo to your computer to view it (run on your PC, not the Pi):
+
+```bash
+scp alanacr@<pi-ip>:~/test.jpg .
+```
+
+Or capture from Python: [robot_code/camera_test.py](robot_code/camera_test.py).
+
+**Gotchas:**
+- **"No cameras available"** is almost always the **ribbon orientation** — flip
+  the cable at the Pi end. Also confirm it's in the **CAMERA (CSI)** connector,
+  not the look-alike **DISPLAY (DSI)** one.
+- **Avoid OV5647 "v1.3" clones** — ours was detected on I²C but never streamed
+  (CSI-2 timeout) and couldn't be fixed in software. The IMX219 just works.
+- CMA is set to `cma-64`, fine up to 1920×1080. For full 8 MP (3280×2464),
+  raise it to `cma-128` in the `dtoverlay=vc4-kms-v3d,cma-…` line.
