@@ -258,3 +258,18 @@ Or capture from Python: [robot_code/camera_test.py](robot_code/camera_test.py).
   (CSI-2 timeout) and couldn't be fixed in software. The IMX219 just works.
 - CMA is set to `cma-64`, fine up to 1920×1080. For full 8 MP (3280×2464),
   raise it to `cma-128` in the `dtoverlay=vc4-kms-v3d,cma-…` line.
+
+---
+
+## Voice Assistant (planned)
+
+The end goal: a voice-controlled assistant that listens, thinks with the
+**Claude API**, and acts (drives, moves the arm, answers out loud).
+
+Pipeline: **mic → speech-to-text → Claude (brain) → speak + act → listen again.**
+
+- Design + component options: [docs/voice-assistant.md](docs/voice-assistant.md)
+- Code skeleton (Claude tool-use loop wired to the motors): [robot_code/assistant.py](robot_code/assistant.py)
+
+Claude runs in the cloud — the Pi 3A+ can't run a large model locally, so the Pi
+captures audio, calls the API, and carries out the actions Claude chooses.
