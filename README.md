@@ -5,7 +5,8 @@ A Raspberry Pi 3 based robotic arm project.
 ## What works today
 
 - ✅ **Drive** — two DC motors via an L9110S driver, controlled from the Pi
-- ✅ **Camera** — IMX219: stills + a **live browser stream over WiFi** (no screen on the Pi)
+- ✅ **Camera** — IMX219: stills + a **live browser stream** (no screen on the Pi)
+- ✅ **Remote access** — watch the camera **from anywhere over the internet** via Tailscale
 - ✅ **Reproducible** — setup steps, boot config, wiring, and code all live in this repo
 - ⏳ **Arm** — 6 servos via a PCA9685 (waiting on parts)
 - ⏳ **Voice assistant** — mic → Claude → speak / act (design + code skeleton done)
@@ -22,8 +23,9 @@ Each step links to the details further down (or to a file in the repo):
 6. **Wire + test motors** — see **Motors (L9110S)**, then `python3 robot_code/motor_test.py`
 7. **Test the camera** — see **Camera (IMX219)**, then `python3 robot_code/camera_test.py`
 8. **Stream the camera live** — `python3 robot_code/camera_stream.py`, then open `http://<pi-ip>:8000`
-9. *(planned)* **Arm** — [docs/pico-setup.md](docs/pico-setup.md) + [docs/voice-assistant.md](docs/voice-assistant.md)
-10. *(planned)* **Voice** — [docs/voice-assistant.md](docs/voice-assistant.md) + `robot_code/assistant.py`
+9. **View from anywhere + auto-start on boot** — Tailscale + a systemd service: [docs/remote-access.md](docs/remote-access.md)
+10. *(planned)* **Arm** — [docs/pico-setup.md](docs/pico-setup.md) + [docs/voice-assistant.md](docs/voice-assistant.md)
+11. *(planned)* **Voice** — [docs/voice-assistant.md](docs/voice-assistant.md) + `robot_code/assistant.py`
 
 ## Repository map
 

@@ -10,6 +10,9 @@ internet, tunnel it out.
 
 ## Option A — Tailscale (recommended: private, just your devices)
 
+> ✅ Confirmed working on a Raspberry Pi 3A+ (Raspberry Pi OS Trixie) — camera
+> viewable from a phone on cellular data.
+
 Tailscale puts the Pi and your devices on a private, encrypted network reachable
 from any connection — no port-forwarding, no public exposure, works behind your
 ISP's NAT. Free for personal use.
@@ -49,34 +52,46 @@ ngrok http 8000            # prints a public https URL
 > ⚠️ Anyone with the link can watch. Add a password (ngrok basic auth) or use a
 > Cloudflare Tunnel behind Cloudflare Access if it's more than a quick demo.
 
-## Optional — make the stream auto-start on boot
+## Make the stream auto-start on boot
 
 Both options need `camera_stream.py` running. To have it start automatically (so
-you don't SSH in each time), install it as a systemd service. Create
-`/etc/systemd/system/camera-stream.service`:
+you don't SSH in each time), install it as a systemd service.
 
-```ini
+First **stop any stream you started by hand** (Ctrl-C) so port 8000 is free.
+Then create the service — paste the whole block (the heredoc writes the file):
+
+```bash
+sudo tee /etc/systemd/system/camera-stream.service > /dev/null <<'EOF'
 [Unit]
 Description=Robot camera MJPEG stream
 After=network.target
 
 [Service]
-# adjust the path if your repo lives elsewhere
+# adjust the path to wherever your camera_stream.py lives
 ExecStart=/usr/bin/python3 /home/alanacr/robotic-startup-automated-arm-worker/robot_code/camera_stream.py
 Restart=on-failure
 User=alanacr
 
 [Install]
 WantedBy=multi-user.target
+EOF
 ```
-Then enable it:
+Enable it (starts now **and** on every boot) and confirm it came up:
 ```bash
+sudo systemctl daemon-reload
 sudo systemctl enable --now camera-stream
+sudo systemctl status camera-stream      # should say: active (running)
 ```
 Use `/usr/bin/python3` (system Python) so `picamera2` is found — not a venv.
+Reboot to prove it: the camera should be live at `http://<tailscale-ip>:8000`
+without you opening SSH at all.
 
 ## Notes
 - Streaming uses upload bandwidth and stresses the Pi's WiFi. If it freezes,
   that's the WiFi (see the motor-ground note in the README); lowering the
   resolution in `camera_stream.py` helps.
 - The stream port is `8000` (set at the top of `camera_stream.py`).
+- **`Illegal instruction`, or the install fails** with a gzip "invalid code
+  lengths" / "unexpected end of file" error → the `tailscale` download got
+  corrupted (flaky WiFi or SD card). Fix: `sudo apt-get clean && sudo apt-get
+  install --reinstall -y tailscale`, then re-run `sudo tailscale up`.
