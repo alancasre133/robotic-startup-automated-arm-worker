@@ -42,9 +42,35 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 
 | # | Component | Qty | What it's for | Approx. (MXN) |
 |---|-----------|-----|---------------|---------------|
-| 9 | 6-DOF robotic arm kit (MG996R servos) | 1 | The arm itself | ~775 |
-| 10 | Raspberry Pi Pico W | 1 | Generates the servo PWM signals | 120–180 |
-| 11 | 5–6V power supply for servos | 1 | Servos draw too much to run off the Pi/Pico | varies |
+| 9 | 6-DOF robotic arm kit (6× MG996R servos) | 1 | The arm itself | ~775 |
+| 10 | PCA9685 16-channel servo driver | 1 | Drives the servos over I²C (the Pi has only 2 hardware PWM pins) | 60–100 |
+| 11 | 6V 2200 mAh NiMH battery pack | 1 (or 2-pack) | Servo power (5–6V). MG996R are current-hungry — never run off the Pi | ~560 (2-pack) |
+| 12 | SM-2P connector pair (pigtail) | 1 | Adapts the battery's SM plug to the PCA9685 screw terminal without cutting it | ~100 |
+| — | Raspberry Pi Pico W *(alternative)* | 1 | Can generate the servo PWM instead of the PCA9685 — see [docs/pico-setup.md](docs/pico-setup.md) | 120–180 |
+
+> **Servo power:** a 6V NiMH pack connects **straight to the PCA9685 V+** (no
+> regulator — 6V is in the MG996R range). **Don't cut the battery's SM plug** (the
+> USB charger uses it); wire an **SM-2P pigtail** into the PCA9685 screw terminal
+> instead — **red → V+, black → GND**. A small AA NiMH pack is fine for testing /
+> light moves; for strong, sustained 6-servo motion, step up to a **2S LiPo + a
+> 5–6V UBEC (5A+)**.
+>
+> Pi → PCA9685 (I²C): `3.3V→VCC`, `GND→GND`, `SDA (pin 3)→SDA`, `SCL (pin 5)→SCL`.
+> Servos plug onto channels 0–5. See `robot_code/assistant.py` (`move_arm`).
+
+## Planned — voice assistant (audio)
+
+| # | Component | Qty | What it's for | Approx. (MXN) |
+|---|-----------|-----|---------------|---------------|
+| 13 | USB conference speakerphone (mic + speaker) | 1 | Voice in **and** out over one USB plug (e.g. Techwolf TWA-Y02) | ~470 |
+| 14 | USB hub (USB-A) | 1 | The Pi 3A+ has one USB port — the hub runs the speakerphone + Pico together | ~120 |
+
+> **We chose USB audio over the I²S kit.** The INMP441 + MAX98357 boards need
+> their headers **soldered** and would collide with Motor A on GPIO20. A USB
+> speakerphone is plug-and-play (USB-audio-class → works on the Pi), needs no
+> soldering, and touches no GPIO. Confirm the speakerphone's cable ends in
+> **USB-A** (or add a USB-C→USB-A adapter). The I²S kit is set aside for later.
+> See [docs/voice-assistant.md](docs/voice-assistant.md).
 
 ---
 
