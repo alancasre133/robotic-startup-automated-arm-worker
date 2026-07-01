@@ -36,6 +36,7 @@ Each step links to the details further down (or to a file in the repo):
 | `docs/voice-assistant.md` | Voice assistant design + STT/TTS options |
 | `docs/voice-pipeline.svg` | Voice pipeline diagram |
 | `docs/pico-setup.md` | Pico W MicroPython flashing |
+| `docs/remote-access.md` | View the camera from anywhere (Tailscale) |
 | `robot_code/motor_test.py` | Drive both motors (test) |
 | `robot_code/camera_test.py` | Capture a still photo |
 | `robot_code/camera_stream.py` | Live camera stream to a browser |
@@ -297,6 +298,9 @@ Python, then open the URL on any device on the same WiFi:
 ```bash
 python3 robot_code/camera_stream.py     # then visit http://<pi-ip>:8000
 ```
+
+To watch the camera from **anywhere on the internet** (not just your home WiFi),
+see [docs/remote-access.md](docs/remote-access.md).
 
 **Gotchas:**
 - **"No cameras available"** is almost always the **ribbon orientation** — flip
