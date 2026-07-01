@@ -58,7 +58,7 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > Pi → PCA9685 (I²C): `3.3V→VCC`, `GND→GND`, `SDA (pin 3)→SDA`, `SCL (pin 5)→SCL`.
 > Servos plug onto channels 0–5. See `robot_code/assistant.py` (`move_arm`).
 
-## Planned — voice assistant (audio)
+## Voice assistant (audio) — working ✅
 
 | # | Component | Qty | What it's for | Approx. (MXN) |
 |---|-----------|-----|---------------|---------------|
@@ -70,7 +70,10 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > speakerphone is plug-and-play (USB-audio-class → works on the Pi), needs no
 > soldering, and touches no GPIO. Confirm the speakerphone's cable ends in
 > **USB-A** (or add a USB-C→USB-A adapter). The I²S kit is set aside for later.
-> See [docs/voice-assistant.md](docs/voice-assistant.md).
+>
+> **Confirmed working:** the BY `Y02` enumerates as ALSA **card 1** (`plughw:1,0`)
+> for both mic and speaker; record + playback tested. Setup / test commands are in
+> [docs/voice-assistant.md](docs/voice-assistant.md).
 
 ---
 

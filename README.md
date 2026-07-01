@@ -8,9 +8,10 @@ A Raspberry Pi 3 based robotic arm project.
 - ✅ **Camera** — IMX219: stills + a **live browser stream** (no screen on the Pi)
 - ✅ **Remote access** — watch the camera **from anywhere over the internet** via Tailscale
 - 🧪 **Vision** — on-device **face detection + motor tracking** (experimental)
+- ✅ **Voice I/O** — USB speakerphone (mic + speaker) records + plays back
 - ✅ **Reproducible** — setup steps, boot config, wiring, and code all live in this repo
 - ⏳ **Arm** — 6 servos via a PCA9685 (waiting on parts)
-- ⏳ **Voice assistant** — mic → Claude → speak / act (design + code skeleton done)
+- ⏳ **Voice assistant** — mic → Claude → speak / act (audio working; Claude brain next)
 
 ## Build it from scratch
 
@@ -342,6 +343,10 @@ The end goal: a voice-controlled assistant that listens, thinks with the
 **Claude API**, and acts (drives, moves the arm, answers out loud).
 
 Pipeline: **mic → speech-to-text → Claude (brain) → speak + act → listen again.**
+
+**Audio I/O already works** — a USB speakerphone (mic + speaker) records and plays
+back cleanly through `plughw:1,0`. The remaining pieces are speech-to-text, the
+Claude brain, and text-to-speech.
 
 - Design + component options: [docs/voice-assistant.md](docs/voice-assistant.md)
 - Code skeleton (Claude tool-use loop wired to the motors): [robot_code/assistant.py](robot_code/assistant.py)

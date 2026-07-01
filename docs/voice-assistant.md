@@ -11,13 +11,13 @@ acts (drives, moves the arm). This is the software plan for that.
 mic → speech-to-text → Claude (brain) → speak reply + act → listen again
 ```
 
-1. **Listen** — capture audio from the INMP441 mic.
+1. **Listen** — capture audio from the USB speakerphone mic.
 2. **Speech-to-text (STT)** — turn the audio into text.
 3. **Think** — send the text to the **Claude API**. Claude decides whether to
    just talk or to *act*, and calls robot tools (`drive`, `move_arm`) when it
    should move.
 4. **Act + speak** — run any tool calls (motors / arm) and read the reply aloud
-   through the MAX98357 amp + speaker.
+   through the USB speakerphone.
 5. **Loop** — go back to listening.
 
 The Pi is the hands and ears; **Claude (in the cloud) is the thinking.** The Pi
@@ -77,19 +77,50 @@ export ANTHROPIC_API_KEY=sk-ant-...      # keep this secret; don't commit it
 | **espeak-ng** | offline, on the Pi | Robotic but tiny and instant — simplest to start with. |
 | Cloud TTS API | needs WiFi | Best quality, per-use cost. |
 
-## Hardware notes
+## Audio hardware — USB speakerphone (working ✅)
 
-- **Mic + speaker:** INMP441 (I²S in) + MAX98357 (I²S out). I²S uses GPIO 18–21,
-  which overlaps Motor A's pin on **GPIO20** — move that motor wire to a free
-  pin first (see the main README's Motors section) and enable I²S in
-  `config.txt`.
-- **Don't put secrets in the repo.** Keep `ANTHROPIC_API_KEY` in the environment
-  (or a `.env` that's git-ignored), never in committed code.
+We use a **USB conference speakerphone** (BY `Y02`) for both mic and speaker — one
+USB plug, no soldering, no GPIO use. It runs through a **USB hub** (the Pi 3A+ has
+only one USB port, shared with the Pico). Confirmed working on Raspberry Pi OS
+Trixie. (This replaces the earlier INMP441/MAX98357 I²S kit, which needed
+soldering and collided with Motor A on GPIO20.)
+
+**Detect it** (after plugging the hub + speakerphone in):
+```bash
+lsusb                # lists the hub + the "Y02" speakerphone
+arecord -l           # capture (mic):     card 1: Y02 ...
+aplay -l             # playback (speaker): card 1: Y02 ...
+```
+Both mic and speaker enumerate as **card 1**, so the ALSA device is `plughw:1,0`
+(the `plughw` plugin auto-converts sample rate / format).
+
+**Record + play back test:**
+```bash
+arecord -D plughw:1,0 -f S16_LE -c 1 -r 16000 -d 5 ~/test.wav   # speak for 5 s
+aplay   -D plughw:1,0 ~/test.wav
+```
+
+> ⚠️ **Silent at first?** A fresh USB audio device is usually muted / at zero
+> volume. Run `alsamixer -c 1`, press `F5` to show all controls, then raise **and
+> unmute** (`M`) both the playback and capture levels and press `Esc`. Also check
+> the speakerphone's own physical mute / volume buttons.
+
+**Make it talk (TTS):**
+```bash
+sudo apt install -y espeak-ng
+espeak-ng "Hello, I am your robot." --stdout | aplay -D plughw:1,0
+```
+Piping through `aplay -D plughw:1,0` routes speech to the USB speaker (not the
+Pi's headphone jack). Upgrade to **Piper** later for a natural voice.
+
+> **Don't put secrets in the repo.** Keep `ANTHROPIC_API_KEY` in the environment
+> (or a `.env` that's git-ignored), never in committed code.
 
 ## Build order
 
 1. ✅ Drive (motors) — done
-2. ⏳ Arm (PCA9685 + servos)
-3. STT + TTS working end to end (text in the terminal first, then voice)
-4. Wire it together: `assistant.py` listens, thinks with Claude, and acts
-5. Add the camera as another tool (let Claude "look" by sending a frame)
+2. ✅ Audio I/O — USB speakerphone mic + speaker record/play back cleanly
+3. ⏳ Arm (PCA9685 + servos)
+4. STT + TTS working end to end (text in the terminal first, then voice)
+5. Wire it together: `assistant.py` listens, thinks with Claude, and acts
+6. Add the camera as another tool (let Claude "look" by sending a frame)
