@@ -7,6 +7,7 @@ A Raspberry Pi 3 based robotic arm project.
 - ✅ **Drive** — two DC motors via an L9110S driver, controlled from the Pi
 - ✅ **Camera** — IMX219: stills + a **live browser stream** (no screen on the Pi)
 - ✅ **Remote access** — watch the camera **from anywhere over the internet** via Tailscale
+- 🧪 **Vision** — on-device **face detection + motor tracking** (experimental)
 - ✅ **Reproducible** — setup steps, boot config, wiring, and code all live in this repo
 - ⏳ **Arm** — 6 servos via a PCA9685 (waiting on parts)
 - ⏳ **Voice assistant** — mic → Claude → speak / act (design + code skeleton done)
@@ -39,9 +40,11 @@ Each step links to the details further down (or to a file in the repo):
 | `docs/voice-pipeline.svg` | Voice pipeline diagram |
 | `docs/pico-setup.md` | Pico W MicroPython flashing |
 | `docs/remote-access.md` | View the camera from anywhere (Tailscale) |
+| `docs/vision.md` | AI vision — faces / objects / hands + roadmap |
 | `robot_code/motor_test.py` | Drive both motors (test) |
 | `robot_code/camera_test.py` | Capture a still photo |
 | `robot_code/camera_stream.py` | Live camera stream to a browser |
+| `robot_code/vision_track.py` | Face detection + motor tracking + stream |
 | `robot_code/assistant.py` | Claude "brain" — tool-use loop (drive wired) |
 
 ---
@@ -312,6 +315,24 @@ see [docs/remote-access.md](docs/remote-access.md).
   (CSI-2 timeout) and couldn't be fixed in software. The IMX219 just works.
 - CMA is set to `cma-64`, fine up to 1920×1080. For full 8 MP (3280×2464),
   raise it to `cma-128` in the `dtoverlay=vc4-kms-v3d,cma-…` line.
+
+---
+
+## AI Vision (experimental)
+
+Detect things in the camera feed and react — starting with **face detection that
+turns the robot to follow you**, running entirely on the Pi (no new hardware).
+
+```bash
+sudo apt install -y python3-opencv opencv-data
+sudo systemctl stop camera-stream          # free the camera + port 8000
+python3 robot_code/vision_track.py         # then watch http://<pi-ip>:8000
+```
+
+Faces are boxed live in the stream; set `DRIVE_MOTORS = True` in the script
+(wheels off the ground!) to let it pivot and track you. The full plan — objects
+(TensorFlow Lite), hands (Coral / Pi 4 / offload), and combining fast on-Pi
+reflexes with the Claude "brain" — is in [docs/vision.md](docs/vision.md).
 
 ---
 
