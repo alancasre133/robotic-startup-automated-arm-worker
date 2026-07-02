@@ -17,7 +17,7 @@ step — see docs/voice-assistant.md.
 
 Status:
     - drive   -> wired to the L9110S motors (gpiozero)
-    - speak   -> espeak-ng out the USB speakerphone (plughw:1,0)
+    - speak   -> Piper (natural) if set up, else espeak-ng, out the USB speaker
     - arm     -> placeholder until the PCA9685 + MG996R servos are connected
     - transcribe() -> stub; wire up Vosk next for voice input
 
@@ -35,7 +35,9 @@ Run (wheels OFF the ground the first time — it can drive!):
 
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 from time import sleep
 
 from gpiozero import Motor
@@ -52,6 +54,9 @@ except ImportError:
 MODEL = "claude-haiku-4-5"
 
 AUDIO_DEVICE = "plughw:1,0"  # the USB speakerphone (card 1)
+# Optional natural voice: install Piper + a voice model, then set PIPER_MODEL to
+# the .onnx path (or drop it at ~/piper/voice.onnx). If it's missing we use espeak-ng.
+PIPER_MODEL = os.environ.get("PIPER_MODEL", os.path.expanduser("~/piper/voice.onnx"))
 
 # Build a Claude client only if the SDK is present AND a key is set. Any problem
 # here just means we run in offline mode.
@@ -197,6 +202,10 @@ def local_brain(user_text: str) -> str:
     """Free, offline rule-based brain — keyword parsing, no API or internet needed."""
     t = user_text.lower()
 
+    # say: "say hello everyone" -> speak the text verbatim
+    if t.startswith("say "):
+        return user_text.strip()[4:].strip()
+
     # arm: "move arm shoulder to 45", "gripper 120"
     if "arm" in t or any(j in t for j in _JOINTS):
         joint = next((j for j in _JOINTS if j in t), "base")
@@ -213,11 +222,14 @@ def local_brain(user_text: str) -> str:
         direction = "left"
     elif "right" in t:
         direction = "right"
+    elif "turn" in t:
+        direction = "left"   # "turn" with no side -> default left
     else:
         direction = None
 
     if direction:
-        m = re.search(r"(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)\b", t)
+        # accept "2 seconds", "2s", or a bare "2"
+        m = re.search(r"(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)?\b", t)
         seconds = float(m.group(1)) if m else 1.0
         return robot_drive(direction, seconds)
 
@@ -254,11 +266,31 @@ def transcribe() -> str:
     raise NotImplementedError("voice input is the next step — see docs/voice-assistant.md")
 
 
-def speak(text: str) -> None:
-    """Say `text` aloud through the USB speaker (espeak-ng -> aplay)."""
-    print(f"[robot] {text}")
-    if not text.strip():
-        return
+def _say_piper(text: str) -> bool:
+    """Natural neural voice (offline). Returns True if it actually played."""
+    if shutil.which("piper") is None or not os.path.exists(PIPER_MODEL):
+        return False
+    wav = None
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            wav = f.name
+        subprocess.run(["piper", "--model", PIPER_MODEL, "--output_file", wav],
+                       input=text.encode(), stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL, check=True)
+        subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE, wav])
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
+    finally:
+        if wav:
+            try:
+                os.remove(wav)
+            except OSError:
+                pass
+
+
+def _say_espeak(text: str) -> None:
+    """Robotic voice — tiny and always available once espeak-ng is installed."""
     try:
         tts = subprocess.Popen(["espeak-ng", text, "--stdout"], stdout=subprocess.PIPE)
         subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE], stdin=tts.stdout)
@@ -266,6 +298,15 @@ def speak(text: str) -> None:
         tts.wait()
     except FileNotFoundError:
         pass  # install with: sudo apt install -y espeak-ng alsa-utils
+
+
+def speak(text: str) -> None:
+    """Say `text` aloud through the USB speaker. Uses Piper if set up, else espeak."""
+    print(f"[robot] {text}")
+    if not text.strip():
+        return
+    if not _say_piper(text):
+        _say_espeak(text)
 
 
 def main() -> None:
