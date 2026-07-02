@@ -9,9 +9,12 @@ A Raspberry Pi 3 based robotic arm project.
 - ✅ **Remote access** — watch the camera **from anywhere over the internet** via Tailscale
 - 🧪 **Vision** — on-device **face detection + motor tracking** (experimental)
 - ✅ **Voice I/O** — USB speakerphone (mic + speaker) records + plays back
+- ✅ **Talk to it** — type a command → the robot acts + speaks, via a **Claude brain or a free offline fallback**
+- ✅ **Interactive face console** — `papoi.py` greets faces **and** takes live commands
 - ✅ **Reproducible** — setup steps, boot config, wiring, and code all live in this repo
 - ⏳ **Arm** — 6 servos via a PCA9685 (waiting on parts)
-- ⏳ **Voice assistant** — mic → Claude → speak / act (audio working; Claude brain next)
+- ⏳ **Voice input** — talk instead of type (mic → speech-to-text); the brain already works
+- ⏳ **Obstacle sensing** — HC-SR04 ultrasonic (on hand; needs a voltage divider on Echo)
 
 ## Build it from scratch
 
@@ -20,14 +23,16 @@ Each step links to the details further down (or to a file in the repo):
 1. **Get the parts** — [HARDWARE.md](HARDWARE.md) (bill of materials + wiring diagram)
 2. **Flash the SD card** — see **Requirements**, then **SD Card Setup & Required Boot Fix**
 3. **First boot + connect** — see **First Boot**, then **Connecting via SSH**
-4. **Install software** — see **Software Setup**: `bash setup.sh`
-5. **Boot config** — match [config/config.txt](config/config.txt); apply steps in **Camera (IMX219)**
-6. **Wire + test motors** — see **Motors (L9110S)**, then `python3 robot_code/motor_test.py`
-7. **Test the camera** — see **Camera (IMX219)**, then `python3 robot_code/camera_test.py`
-8. **Stream the camera live** — `python3 robot_code/camera_stream.py`, then open `http://<pi-ip>:8000`
-9. **View from anywhere + auto-start on boot** — Tailscale + a systemd service: [docs/remote-access.md](docs/remote-access.md)
-10. *(planned)* **Arm** — [docs/pico-setup.md](docs/pico-setup.md) + [docs/voice-assistant.md](docs/voice-assistant.md)
-11. *(planned)* **Voice** — [docs/voice-assistant.md](docs/voice-assistant.md) + `robot_code/assistant.py`
+4. **Get the code onto the Pi** — see **Get the Code (git)**
+5. **Install software** — see **Software Setup**: `bash setup.sh`
+6. **Boot config** — match [config/config.txt](config/config.txt); apply steps in **Camera (IMX219)**
+7. **Wire + test motors** — see **Motors (L9110S)**, then `python3 robot_code/motor_test.py`
+8. **Test the camera** — see **Camera (IMX219)**, then `python3 robot_code/camera_test.py`
+9. **Stream the camera live** — `python3 robot_code/camera_stream.py`, then open `http://<pi-ip>:8000`
+10. **View from anywhere + auto-start on boot** — Tailscale + a systemd service: [docs/remote-access.md](docs/remote-access.md)
+11. **Talk to the robot** — `python3 robot_code/assistant.py` (works offline; add a key for the Claude brain) — see **Talk to the Robot**
+12. *(planned)* **Arm** — [docs/pico-setup.md](docs/pico-setup.md) + [docs/voice-assistant.md](docs/voice-assistant.md)
+13. *(planned)* **Voice input** — [docs/voice-assistant.md](docs/voice-assistant.md) + `robot_code/assistant.py`
 
 ## Repository map
 
@@ -46,8 +51,8 @@ Each step links to the details further down (or to a file in the repo):
 | `robot_code/camera_test.py` | Capture a still photo |
 | `robot_code/camera_stream.py` | Live camera stream to a browser |
 | `robot_code/vision_track.py` | Face detection + motor tracking + stream |
-| `robot_code/papoi.py` | Fun demo — say "papoi" out loud when it sees a face |
-| `robot_code/assistant.py` | Claude "brain" — tool-use loop (drive wired) |
+| `robot_code/papoi.py` | Interactive face console — greets faces + takes live commands |
+| `robot_code/assistant.py` | Talk to the robot — Claude brain + free offline fallback |
 
 ---
 
@@ -225,6 +230,28 @@ Download it from [https://filezilla-project.org](https://filezilla-project.org) 
 
 ---
 
+## Get the Code (git)
+
+Install git and clone this repo onto the Pi:
+
+```bash
+sudo apt install -y git
+cd ~
+git clone https://github.com/alancasre133/robotic-startup-automated-arm-worker.git
+cd robotic-startup-automated-arm-worker
+```
+
+- **Private repo?** GitHub no longer accepts your account password over git. Create
+  a **fine-grained Personal Access Token** (GitHub → Settings → Developer settings →
+  Fine-grained tokens) with **Contents: Read-only**, and paste it as the *password*
+  when prompted. Run `git config --global credential.helper store` first so the
+  token is saved and future `git pull`s don't prompt.
+- Pull updates any time with `git pull`.
+- No git / prefer drag-and-drop? Copy files over with **FileZilla (SFTP)** — see
+  the FileZilla section above.
+
+---
+
 ## Software Setup (after first boot)
 
 Once you can SSH in, install all dependencies with one command:
@@ -338,22 +365,43 @@ reflexes with the Claude "brain" — is in [docs/vision.md](docs/vision.md).
 
 ---
 
-## Voice Assistant (planned)
+## Talk to the Robot (assistant)
 
-The end goal: a voice-controlled assistant that listens, thinks with the
-**Claude API**, and acts (drives, moves the arm, answers out loud).
+Type a command and the robot **acts and talks back**. It has two brains with
+automatic fallback:
 
-Pipeline: **mic → speech-to-text → Claude (brain) → speak + act → listen again.**
+- **Claude API (smart)** — natural language, when an `ANTHROPIC_API_KEY` is set.
+- **Offline rules (free)** — a standard-library keyword parser; no key, no
+  internet, no pip installs. Used automatically if Claude isn't available.
 
-**Audio I/O already works** — a USB speakerphone (mic + speaker) records and plays
-back cleanly through `plughw:1,0`. The remaining pieces are speech-to-text, the
-Claude brain, and text-to-speech.
+Basic commands (`forward`, `back`, `left`, `right`, `turn`, `stop`, arm moves,
+`say ...`) always work — and `stop` acts instantly. Replies are spoken through the
+USB speaker (Piper if installed, else espeak-ng).
 
-- Design + component options: [docs/voice-assistant.md](docs/voice-assistant.md)
-- Code skeleton (Claude tool-use loop wired to the motors): [robot_code/assistant.py](robot_code/assistant.py)
+**Run it (offline mode — nothing to install beyond the base setup):**
+```bash
+python3 robot_code/assistant.py          # wheels OFF the ground — it can drive!
+# you> drive forward for 2 seconds
+# you> turn left, then say hello
+```
 
-Claude runs in the cloud — the Pi 3A+ can't run a large model locally, so the Pi
-captures audio, calls the API, and carries out the actions Claude chooses.
+**Add the Claude brain** (optional) — a venv that can still see the system
+`gpiozero`, plus your key:
+```bash
+python3 -m venv --system-site-packages ~/venv
+source ~/venv/bin/activate
+pip install anthropic
+export ANTHROPIC_API_KEY=sk-ant-...       # keep it secret; never commit it
+python3 robot_code/assistant.py
+```
+
+**Interactive face console** — [robot_code/papoi.py](robot_code/papoi.py) does both
+at once: it watches the camera and greets faces (default: says "papoi", 5 s
+cooldown) **while** taking the same typed commands — including `when you see my
+face do X` to reprogram the greeting live.
+
+Design, STT/TTS options, and the roadmap: [docs/voice-assistant.md](docs/voice-assistant.md).
+The next step is **voice input** (mic → speech-to-text) so you talk instead of type.
 
 ---
 

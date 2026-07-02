@@ -42,25 +42,29 @@ the result back → repeat until Claude returns a normal reply → speak it.
 
 ### Model choice
 
-The skeleton defaults to **`claude-opus-4-8`** (most capable). For a voice loop,
-latency and cost matter, so you may prefer a faster/cheaper model — just change
-the `MODEL` constant:
+`assistant.py` defaults to **`claude-haiku-4-5`** — fastest + cheapest, best for a
+snappy voice loop. Change the `MODEL` constant for more capability:
 
 | Model | Use when |
 |-------|----------|
-| `claude-opus-4-8` | best quality (default) |
+| `claude-haiku-4-5` | fastest + cheapest — **the default**, good for snappy voice |
 | `claude-sonnet-4-6` | balanced speed / cost |
-| `claude-haiku-4-5` | fastest + cheapest — good for snappy voice |
+| `claude-opus-4-8` | best quality |
 
 ### Setup
 
-On the Pi, use a virtualenv (Trixie's system Python is externally managed):
+On the Pi, use a virtualenv that can **still see the system `gpiozero`** (Trixie's
+system Python is externally managed):
 
 ```bash
-python3 -m venv ~/venv && source ~/venv/bin/activate
-pip install anthropic gpiozero lgpio
+python3 -m venv --system-site-packages ~/venv
+source ~/venv/bin/activate
+pip install anthropic                    # gpiozero / lgpio come from the system
 export ANTHROPIC_API_KEY=sk-ant-...      # keep this secret; don't commit it
 ```
+
+Offline mode needs none of this — just run `python3 robot_code/assistant.py` with
+the system Python (no venv, no key).
 
 ## Offline fallback (free — no API, no internet)
 
@@ -122,7 +126,9 @@ sudo apt install -y espeak-ng
 espeak-ng "Hello, I am your robot." --stdout | aplay -D plughw:1,0
 ```
 Piping through `aplay -D plughw:1,0` routes speech to the USB speaker (not the
-Pi's headphone jack). Upgrade to **Piper** later for a natural voice.
+Pi's headphone jack). `assistant.py`'s `speak()` already prefers **Piper** for a
+natural voice — install Piper + a voice model and point `PIPER_MODEL` at the
+`.onnx` file — and falls back to espeak-ng automatically when Piper isn't set up.
 
 > **Don't put secrets in the repo.** Keep `ANTHROPIC_API_KEY` in the environment
 > (or a `.env` that's git-ignored), never in committed code.

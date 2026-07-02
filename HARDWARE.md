@@ -75,6 +75,27 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > for both mic and speaker; record + playback tested. Setup / test commands are in
 > [docs/voice-assistant.md](docs/voice-assistant.md).
 
+## On hand — obstacle sensing (ultrasonic)
+
+| # | Component | Qty | What it's for | Approx. (MXN) |
+|---|-----------|-----|---------------|---------------|
+| 15 | HC-SR04 ultrasonic distance sensor | 1 | Sonar: measure distance; stop / turn before hitting things | 30–60 |
+| 16 | 2 resistors (~1 kΩ + 2 kΩ) **or** a logic level shifter | 1 | Drop the 5 V **Echo** pin to 3.3 V so it's safe for the Pi | ~20 |
+
+> ⚠️ **Protect the Pi:** the HC-SR04's **Echo** pin outputs **5 V**, but Pi GPIO
+> tolerates only **3.3 V**. Put a voltage divider on Echo (`Echo →1 kΩ→ GPIO`, then
+> `GPIO →2 kΩ→ GND`) — or use an **HC-SR04*P*** / 3.3 V board and skip it.
+> Wiring: `VCC→5 V`, `GND→GND`, `Trig→` a free GPIO (e.g. **GPIO23**), `Echo→` a
+> free GPIO **via the divider** (e.g. **GPIO24**). Avoid the motor pins
+> (16, 20, 27, 22). `gpiozero`'s `DistanceSensor(echo=…, trigger=…)` reads it in a
+> couple of lines (`sensor.distance` is in metres).
+
+## Software / accounts
+
+- **Anthropic API key** *(optional)* — only for the smart Claude brain in
+  `robot_code/assistant.py`. The robot runs fully **offline and free** without it.
+  See [docs/voice-assistant.md](docs/voice-assistant.md).
+
 ---
 
 ## Tools
