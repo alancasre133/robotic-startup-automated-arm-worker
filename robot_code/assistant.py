@@ -1,14 +1,19 @@
 """
-Robot assistant brain — Claude decides what to do, and the robot acts + talks back.
+Robot assistant brain — decides what to do, and the robot acts + talks back.
 
-Pipeline:  your command -> Claude (decides) -> {speak reply, drive, move arm} -> repeat
+Pipeline:  your command -> brain (decides) -> {speak reply, drive, move arm} -> repeat
 
-Claude is the "brain": it receives your request, decides whether to talk, drive,
-or move the arm, and calls robot tools to act. This wires the Claude API tool-use
-loop to the robot's hardware.
+TWO brains, automatic fallback:
+  1. Claude API (smart)  — natural language, when a key is set and the API works.
+  2. Offline rules (free) — a standard-library keyword parser; no key, no internet,
+     no pip installs. Used automatically if Claude isn't available or a call fails.
 
-Right now you TYPE commands (this proves the brain + motors + speech end to end).
-Adding your VOICE (mic -> speech-to-text) is the next step — see docs/voice-assistant.md.
+So the robot ALWAYS responds to basic commands (forward / back / left / right /
+stop / arm) — even with no API key or no WiFi — and gets smarter when Claude is up.
+As a safety bonus, "stop" always acts instantly, before the brain is even consulted.
+
+Right now you TYPE commands. Adding your VOICE (mic -> speech-to-text) is the next
+step — see docs/voice-assistant.md.
 
 Status:
     - drive   -> wired to the L9110S motors (gpiozero)
@@ -16,21 +21,30 @@ Status:
     - arm     -> placeholder until the PCA9685 + MG996R servos are connected
     - transcribe() -> stub; wire up Vosk next for voice input
 
-Setup (on the Pi) — use a venv that can STILL SEE the system gpiozero:
+Setup (on the Pi):
+    # OFFLINE mode needs nothing extra — just run it (gpiozero is already installed).
+    # For the CLAUDE brain, add the SDK in a venv that can still see gpiozero:
     python3 -m venv --system-site-packages ~/venv
     source ~/venv/bin/activate
     pip install anthropic
-    export ANTHROPIC_API_KEY=sk-ant-...          # your key; keep it secret, don't commit it
+    export ANTHROPIC_API_KEY=sk-ant-...          # your key; keep it secret
 
 Run (wheels OFF the ground the first time — it can drive!):
     python3 robot_code/assistant.py
 """
 
+import os
+import re
 import subprocess
 from time import sleep
 
-import anthropic
 from gpiozero import Motor
+
+# The Claude SDK is optional — the robot still works offline without it.
+try:
+    import anthropic
+except ImportError:
+    anthropic = None
 
 # --- Model -----------------------------------------------------------------
 # Haiku 4.5 — fastest + cheapest, best for a snappy voice loop. Switch to
@@ -39,7 +53,14 @@ MODEL = "claude-haiku-4-5"
 
 AUDIO_DEVICE = "plughw:1,0"  # the USB speakerphone (card 1)
 
-client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
+# Build a Claude client only if the SDK is present AND a key is set. Any problem
+# here just means we run in offline mode.
+client = None
+if anthropic is not None and os.environ.get("ANTHROPIC_API_KEY"):
+    try:
+        client = anthropic.Anthropic()
+    except Exception:
+        client = None
 
 # --- Hardware --------------------------------------------------------------
 # Motors (L9110S) — same wiring as motor_test.py
@@ -127,8 +148,9 @@ SYSTEM = (
 )
 
 
-def handle(user_text: str, history: list) -> str:
-    """Send the user's text to Claude, run any tool calls it makes, return the reply to speak."""
+# --- Brain 1: Claude API ---------------------------------------------------
+def claude_brain(user_text: str, history: list) -> str:
+    """Send the user's text to Claude, run any tool calls it makes, return the reply."""
     history.append({"role": "user", "content": user_text})
     while True:
         resp = client.messages.create(
@@ -153,6 +175,61 @@ def handle(user_text: str, history: list) -> str:
                     {"type": "tool_result", "tool_use_id": block.id, "content": output}
                 )
         history.append({"role": "user", "content": results})
+
+
+# --- Brain 2: offline rules (standard library only) ------------------------
+_JOINTS = ("base", "shoulder", "elbow", "wrist", "gripper")
+
+
+def local_brain(user_text: str) -> str:
+    """Free, offline rule-based brain — keyword parsing, no API or internet needed."""
+    t = user_text.lower()
+
+    # arm: "move arm shoulder to 45", "gripper 120"
+    if "arm" in t or any(j in t for j in _JOINTS):
+        joint = next((j for j in _JOINTS if j in t), "base")
+        m = re.search(r"(-?\d+(?:\.\d+)?)", t)
+        angle = float(m.group(1)) if m else 90.0
+        return robot_move_arm(joint, angle)
+
+    # drive direction
+    if "forward" in t or "ahead" in t or "straight" in t:
+        direction = "forward"
+    elif "back" in t or "reverse" in t:
+        direction = "backward"
+    elif "left" in t:
+        direction = "left"
+    elif "right" in t:
+        direction = "right"
+    else:
+        direction = None
+
+    if direction:
+        m = re.search(r"(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)\b", t)
+        seconds = float(m.group(1)) if m else 1.0
+        return robot_drive(direction, seconds)
+
+    # chit-chat / help
+    if any(w in t for w in ("hello", "hi", "hey")):
+        return "Hi. I'm running in offline mode."
+    if "help" in t or "what can you" in t or "command" in t:
+        return "Offline mode. Say: forward, back, left, right, stop, or move the arm."
+
+    return "Offline mode understands forward, back, left, right, stop, and arm moves."
+
+
+def think(user_text: str, history: list) -> str:
+    """Use Claude if available; fall back to the offline brain on any failure."""
+    # Safety: "stop" always acts instantly, even if Claude is slow or down.
+    if "stop" in user_text.lower():
+        return robot_drive("stop")
+    if client is not None:
+        try:
+            return claude_brain(user_text, history)
+        except Exception as exc:
+            print(f"[Claude unavailable: {exc}] -> offline mode")
+            return local_brain(user_text)
+    return local_brain(user_text)
 
 
 # --- Speech in / out -------------------------------------------------------
@@ -181,8 +258,12 @@ def speak(text: str) -> None:
 
 def main() -> None:
     history: list = []
-    print("Robot assistant ready. Try:  drive forward for 2 seconds")
-    print("Type 'quit' to exit.\n")
+    if client is not None:
+        print(f"Brain: Claude ({MODEL}), with automatic offline fallback.")
+    else:
+        why = "no anthropic SDK" if anthropic is None else "no ANTHROPIC_API_KEY"
+        print(f"Brain: OFFLINE rules ({why}) — basic commands only.")
+    print("Try:  drive forward for 2 seconds     (type 'quit' to exit)\n")
     speak("Hi, I am ready.")
     try:
         while True:
@@ -191,8 +272,7 @@ def main() -> None:
                 continue
             if user_text.lower() in ("quit", "exit", "q"):
                 break
-            reply = handle(user_text, history)
-            speak(reply)
+            speak(think(user_text, history))
     except (KeyboardInterrupt, EOFError):
         pass
     finally:

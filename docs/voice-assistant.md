@@ -62,6 +62,17 @@ pip install anthropic gpiozero lgpio
 export ANTHROPIC_API_KEY=sk-ant-...      # keep this secret; don't commit it
 ```
 
+## Offline fallback (free — no API, no internet)
+
+`robot_code/assistant.py` has a **second brain**: a standard-library keyword
+parser (`local_brain`) that runs whenever the Claude SDK isn't installed, no
+`ANTHROPIC_API_KEY` is set, or a Claude call fails. It understands the basic
+commands — `forward`, `back`, `left`, `right`, `stop`, and arm moves — and drives
+the motors directly. So the robot always responds to simple commands (and `stop`
+acts **instantly**, before Claude is even consulted), and upgrades to full natural
+language when Claude is available. Offline mode needs no key, no WiFi, and no pip
+installs — just run `python3 robot_code/assistant.py` with the system Python.
+
 ## Speech-to-text (STT) options
 
 | Option | Runs | Notes |
@@ -120,7 +131,7 @@ Pi's headphone jack). Upgrade to **Piper** later for a natural voice.
 
 1. ✅ Drive (motors) — done
 2. ✅ Audio I/O — USB speakerphone mic + speaker record/play back cleanly
-3. ⏳ Arm (PCA9685 + servos)
-4. STT + TTS working end to end (text in the terminal first, then voice)
-5. Wire it together: `assistant.py` listens, thinks with Claude, and acts
+3. ✅ Text brain — type a command, robot acts + speaks (Claude, or offline fallback)
+4. ⏳ Arm (PCA9685 + servos)
+5. Voice — mic → Vosk speech-to-text so you talk instead of type
 6. Add the camera as another tool (let Claude "look" by sending a frame)
