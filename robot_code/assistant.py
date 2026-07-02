@@ -1,37 +1,43 @@
 """
-Voice assistant brain for the robot.
+Robot assistant brain — Claude decides what to do, and the robot acts + talks back.
 
-Pipeline:  mic -> speech-to-text -> Claude (decides) -> {speak reply, drive / move arm} -> repeat
+Pipeline:  your command -> Claude (decides) -> {speak reply, drive, move arm} -> repeat
 
-Claude is the "brain": it receives the transcribed request, decides whether to
-talk, drive, or move the arm, and calls robot tools to act. This file wires the
-Claude API tool-use loop to the robot's hardware functions.
+Claude is the "brain": it receives your request, decides whether to talk, drive,
+or move the arm, and calls robot tools to act. This wires the Claude API tool-use
+loop to the robot's hardware.
 
-See docs/voice-assistant.md for the full design and component options.
+Right now you TYPE commands (this proves the brain + motors + speech end to end).
+Adding your VOICE (mic -> speech-to-text) is the next step — see docs/voice-assistant.md.
 
 Status:
-    - drive tools  -> wired to gpiozero (works once the motors are wired)
-    - arm tools    -> placeholder until the PCA9685 + MG996R servos are connected
-    - transcribe() / speak() -> stubs; pick a speech engine per docs/voice-assistant.md
+    - drive   -> wired to the L9110S motors (gpiozero)
+    - speak   -> espeak-ng out the USB speakerphone (plughw:1,0)
+    - arm     -> placeholder until the PCA9685 + MG996R servos are connected
+    - transcribe() -> stub; wire up Vosk next for voice input
 
-Setup (on the Pi; use a virtualenv — Trixie's system Python is externally managed):
-    python3 -m venv ~/venv && source ~/venv/bin/activate
-    pip install anthropic gpiozero lgpio
-    export ANTHROPIC_API_KEY=sk-ant-...
+Setup (on the Pi) — use a venv that can STILL SEE the system gpiozero:
+    python3 -m venv --system-site-packages ~/venv
+    source ~/venv/bin/activate
+    pip install anthropic
+    export ANTHROPIC_API_KEY=sk-ant-...          # your key; keep it secret, don't commit it
 
-Run:
-    python3 assistant.py
+Run (wheels OFF the ground the first time — it can drive!):
+    python3 robot_code/assistant.py
 """
 
+import subprocess
 from time import sleep
 
 import anthropic
 from gpiozero import Motor
 
 # --- Model -----------------------------------------------------------------
-# Most capable. For the lowest latency / cost on a voice loop you can switch to
-# "claude-haiku-4-5" (fastest, cheapest) or "claude-sonnet-4-6" (balanced).
-MODEL = "claude-opus-4-8"
+# Haiku 4.5 — fastest + cheapest, best for a snappy voice loop. Switch to
+# "claude-opus-4-8" for maximum smarts (slower / pricier) or "claude-sonnet-4-6".
+MODEL = "claude-haiku-4-5"
+
+AUDIO_DEVICE = "plughw:1,0"  # the USB speakerphone (card 1)
 
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from the environment
 
@@ -149,36 +155,50 @@ def handle(user_text: str, history: list) -> str:
         history.append({"role": "user", "content": results})
 
 
-# --- Speech in / out (stubs) ----------------------------------------------
+# --- Speech in / out -------------------------------------------------------
 def transcribe() -> str:
-    """Capture audio from the mic and return the recognized text.
+    """(Next step) capture mic audio and return recognized text via Vosk.
 
-    TODO: implement with the INMP441 I2S mic. Options (see docs/voice-assistant.md):
-      - Vosk (offline, lightweight, runs on the Pi 3)
-      - a cloud speech-to-text API (higher quality, needs WiFi)
+    Voice input isn't wired yet — for now you type commands in main(). To add it:
+    arecord from plughw:1,0 -> Vosk offline recognizer. See docs/voice-assistant.md.
     """
-    raise NotImplementedError("wire up speech-to-text — see docs/voice-assistant.md")
+    raise NotImplementedError("voice input is the next step — see docs/voice-assistant.md")
 
 
 def speak(text: str) -> None:
-    """Speak `text` aloud through the MAX98357 amp + speaker.
-
-    TODO: implement with piper (offline neural TTS) or espeak-ng (simplest).
-    """
-    print(f"[assistant] {text}")  # placeholder: print until TTS is wired
+    """Say `text` aloud through the USB speaker (espeak-ng -> aplay)."""
+    print(f"[robot] {text}")
+    if not text.strip():
+        return
+    try:
+        tts = subprocess.Popen(["espeak-ng", text, "--stdout"], stdout=subprocess.PIPE)
+        subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE], stdin=tts.stdout)
+        tts.stdout.close()
+        tts.wait()
+    except FileNotFoundError:
+        pass  # install with: sudo apt install -y espeak-ng alsa-utils
 
 
 def main() -> None:
     history: list = []
-    print("Voice assistant ready. Ctrl+C to quit.")
+    print("Robot assistant ready. Try:  drive forward for 2 seconds")
+    print("Type 'quit' to exit.\n")
+    speak("Hi, I am ready.")
     try:
         while True:
-            user_text = transcribe()        # listen
-            reply = handle(user_text, history)  # think + act
-            speak(reply)                    # respond
+            user_text = input("you> ").strip()
+            if not user_text:
+                continue
+            if user_text.lower() in ("quit", "exit", "q"):
+                break
+            reply = handle(user_text, history)
+            speak(reply)
+    except (KeyboardInterrupt, EOFError):
+        pass
     finally:
         motor_a.stop()
         motor_b.stop()
+        print("\nbye")
 
 
 if __name__ == "__main__":
