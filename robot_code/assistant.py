@@ -63,31 +63,43 @@ if anthropic is not None and os.environ.get("ANTHROPIC_API_KEY"):
         client = None
 
 # --- Hardware --------------------------------------------------------------
-# Motors (L9110S) — same wiring as motor_test.py
-motor_a = Motor(forward=16, backward=20)
-motor_b = Motor(forward=27, backward=22)
+# Motors (L9110S) — same wiring as motor_test.py. Created LAZILY on first use so
+# just starting the program never touches the motor pins (no startup twitch).
+motor_a = None
+motor_b = None
+
+
+def _ensure_motors():
+    """Create the Motor objects on first drive (keeps startup motor-silent)."""
+    global motor_a, motor_b
+    if motor_a is None:
+        motor_a = Motor(forward=16, backward=20)
+        motor_b = Motor(forward=27, backward=22)
+    return motor_a, motor_b
 
 
 def robot_drive(direction: str, seconds: float = 1.0) -> str:
     """Drive the car for a short time, then stop."""
-    moves = {
-        "forward":  (motor_a.forward,  motor_b.forward),
-        "backward": (motor_a.backward, motor_b.backward),
-        "left":     (motor_a.backward, motor_b.forward),
-        "right":    (motor_a.forward,  motor_b.backward),
-    }
     if direction == "stop":
-        motor_a.stop()
-        motor_b.stop()
+        if motor_a is not None:      # only stop motors that were already started
+            motor_a.stop()
+            motor_b.stop()
         return "stopped"
-    if direction not in moves:
+    if direction not in ("forward", "backward", "left", "right"):
         return f"unknown direction: {direction}"
+    a, b = _ensure_motors()
+    moves = {
+        "forward":  (a.forward,  b.forward),
+        "backward": (a.backward, b.backward),
+        "left":     (a.backward, b.forward),
+        "right":    (a.forward,  b.backward),
+    }
     left, right = moves[direction]
     left()
     right()
     sleep(min(seconds, 5))  # cap so a bad value can't run forever
-    motor_a.stop()
-    motor_b.stop()
+    a.stop()
+    b.stop()
     return f"drove {direction} for {seconds}s"
 
 
@@ -276,8 +288,10 @@ def main() -> None:
     except (KeyboardInterrupt, EOFError):
         pass
     finally:
-        motor_a.stop()
-        motor_b.stop()
+        if motor_a is not None:
+            motor_a.stop()
+        if motor_b is not None:
+            motor_b.stop()
         print("\nbye")
 
 
