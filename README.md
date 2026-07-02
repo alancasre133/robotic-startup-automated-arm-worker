@@ -46,6 +46,7 @@ Each step links to the details further down (or to a file in the repo):
 | `robot_code/camera_test.py` | Capture a still photo |
 | `robot_code/camera_stream.py` | Live camera stream to a browser |
 | `robot_code/vision_track.py` | Face detection + motor tracking + stream |
+| `robot_code/papoi.py` | Fun demo — say "papoi" out loud when it sees a face |
 | `robot_code/assistant.py` | Claude "brain" — tool-use loop (drive wired) |
 
 ---
