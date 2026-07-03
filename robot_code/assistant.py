@@ -83,12 +83,33 @@ def _ensure_motors():
     return motor_a, motor_b
 
 
+def _brake(*motors) -> None:
+    """Actively brake: drive both L9110S inputs high to halt fast, then release.
+
+    Plain gpiozero stop() only cuts power, so the wheels coast — very noticeable
+    with the wheels off the ground (nothing slows them). Driving both inputs high
+    shorts the motor for a dynamic brake. Falls back to a plain stop if the driver
+    devices aren't exposed on this gpiozero version.
+    """
+    braked = False
+    for m in motors:
+        try:
+            m.forward_device.value = 1
+            m.backward_device.value = 1
+            braked = True
+        except Exception:
+            pass
+    if braked:
+        sleep(0.15)
+    for m in motors:
+        m.stop()
+
+
 def robot_drive(direction: str, seconds: float = 1.0) -> str:
     """Drive the car for a short time, then stop."""
     if direction == "stop":
-        if motor_a is not None:      # only stop motors that were already started
-            motor_a.stop()
-            motor_b.stop()
+        if motor_a is not None:      # only brake motors that were already started
+            _brake(motor_a, motor_b)
         return "stopped"
     if direction not in ("forward", "backward", "left", "right"):
         return f"unknown direction: {direction}"
@@ -103,8 +124,7 @@ def robot_drive(direction: str, seconds: float = 1.0) -> str:
     left()
     right()
     sleep(min(seconds, 5))  # cap so a bad value can't run forever
-    a.stop()
-    b.stop()
+    _brake(a, b)            # active stop so it doesn't coast (esp. wheels-up)
     return f"drove {direction} for {seconds}s"
 
 
