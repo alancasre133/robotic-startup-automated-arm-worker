@@ -78,8 +78,12 @@ def _ensure_motors():
     """Create the Motor objects on first drive (keeps startup motor-silent)."""
     global motor_a, motor_b
     if motor_a is None:
-        motor_a = Motor(forward=16, backward=20)
-        motor_b = Motor(forward=27, backward=22)
+        # pwm=False -> plain digital on/off. gpiozero's software PWM was leaving
+        # the pin driving after stop() on this board (the motor only stopped when
+        # the program exited and released the pins). Digital output makes stop() a
+        # hard low that actually cuts the motor.
+        motor_a = Motor(forward=16, backward=20, pwm=False)
+        motor_b = Motor(forward=27, backward=22, pwm=False)
     return motor_a, motor_b
 
 
