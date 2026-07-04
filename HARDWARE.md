@@ -80,7 +80,7 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 | # | Component | Qty | What it's for | Approx. (MXN) |
 |---|-----------|-----|---------------|---------------|
 | 15 | HC-SR04 ultrasonic distance sensor | 1 | Sonar: measure distance; stop / turn before hitting things | 30–60 |
-| 16 | 2 resistors (~1 kΩ + 2 kΩ) **or** a logic level shifter | 1 | Drop the 5 V **Echo** pin to 3.3 V so it's safe for the Pi | ~20 |
+| 16 | 1 kΩ + 2 kΩ resistors — from the **REXQualis 650-pc / 22-value 1/4W kit** (has 1 kΩ ×50 and 2 kΩ ×25) **or** a logic level shifter | 1 each | Drop the 5 V **Echo** pin to 3.3 V so it's safe for the Pi | ~99 (whole kit) |
 
 > ⚠️ **Protect the Pi:** the HC-SR04's **Echo** pin outputs **5 V**, but Pi GPIO
 > tolerates only **3.3 V**. Put a voltage divider on Echo (`Echo →1 kΩ→ GPIO`, then
