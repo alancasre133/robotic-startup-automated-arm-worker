@@ -142,8 +142,23 @@ def _stop_music() -> str:
     return "Nothing is playing."
 
 
-def download_song(query: str) -> str:
-    """Download a song as mp3 using yt-dlp."""
+def _search_youtube(query: str, max_results: int = 3) -> list[str]:
+    """Return up to max_results song titles from YouTube without downloading."""
+    if not shutil.which("yt-dlp"):
+        return []
+    try:
+        result = subprocess.run(
+            ["yt-dlp", "--get-title", "--no-playlist", f"ytsearch{max_results}:{query}"],
+            capture_output=True, text=True, timeout=15,
+        )
+        titles = [t.strip() for t in result.stdout.strip().splitlines() if t.strip()]
+        return titles[:max_results]
+    except Exception:
+        return []
+
+
+def _download_by_title(title: str) -> str:
+    """Download a specific song by its exact YouTube title."""
     if not shutil.which("yt-dlp"):
         return "yt-dlp is not installed. Run: pip install yt-dlp"
     os.makedirs(MUSIC_DIR, exist_ok=True)
@@ -152,34 +167,121 @@ def download_song(query: str) -> str:
             [
                 "yt-dlp", "-x", "--audio-format", "mp3", "--audio-quality", "5",
                 "--output", os.path.join(MUSIC_DIR, "%(title)s.%(ext)s"),
-                f"ytsearch1:{query}",
+                f"ytsearch1:{title}",
             ],
             check=True,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
-        return f"Downloaded: {query}"
+        return f"Downloaded: {title}"
     except subprocess.CalledProcessError as e:
         return f"Download failed: {e}"
 
 
-def play_song(query: str = "") -> str:
-    """Play a local mp3. If query given, find the closest match in ~/music."""
+def download_song(query: str) -> str:
+    """Download a song as mp3 using yt-dlp."""
+    return _download_by_title(query)
+
+
+def _play_file(path: str) -> str:
+    """Start playing an mp3 file immediately."""
     global _music_proc
     _stop_music()
-    songs = sorted(glob(os.path.join(MUSIC_DIR, "*.mp3")))
-    if not songs:
-        return "No songs in ~/music yet. Ask me to download one first."
-    if query:
-        match = next((s for s in songs if query.lower() in os.path.basename(s).lower()), songs[0])
-    else:
-        match = songs[0]
     _music_proc = subprocess.Popen(
-        ["mpg123", "-q", "-a", AUDIO_DEVICE, match],
+        ["mpg123", "-q", "-a", AUDIO_DEVICE, path],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    return f"Playing {os.path.basename(match)}."
+    return f"Playing {os.path.basename(path)}."
+
+
+def _pick_from_voice(options: list[str], voice_mode: bool) -> int:
+    """
+    Ask the user to pick one of the options by voice or keyboard.
+    Returns the 0-based index of the chosen option.
+    Falls back to option 0 if the input is not understood.
+    """
+    speak("You can say option 1, 2, or 3. Or I will play the first one if I don't understand.")
+    try:
+        if voice_mode:
+            answer = transcribe()
+        else:
+            answer = input("pick (1/2/3)> ").strip()
+    except Exception:
+        return 0
+
+    low = answer.lower()
+    # match "one"/"two"/"three" or "1"/"2"/"3" or "first"/"second"/"third"
+    for idx, words in enumerate([
+        ("1", "one", "first"),
+        ("2", "two", "second"),
+        ("3", "three", "third"),
+    ]):
+        if any(w in low for w in words):
+            return idx
+
+    # try matching any part of an option title
+    for i, title in enumerate(options):
+        if any(word in title.lower() for word in low.split() if len(word) > 3):
+            return i
+
+    speak("I didn't catch that, playing the first one.")
+    return 0
+
+
+# Global voice_mode flag — set in main() so music functions can use it
+_voice_mode = False
+
+
+def play_song(query: str = "") -> str:
+    """
+    Play a local mp3 matching the query.
+    If not found locally, search YouTube for up to 3 options, let the user
+    pick by voice or keyboard, then download and play the chosen one.
+    """
+    songs = sorted(glob(os.path.join(MUSIC_DIR, "*.mp3")))
+
+    # 1. No query — play whatever is in the library
+    if not query:
+        if not songs:
+            return "No songs in ~/music yet. Ask me to download one first."
+        return _play_file(songs[0])
+
+    # 2. Query — look for a local match first
+    match = next((s for s in songs if query.lower() in os.path.basename(s).lower()), None)
+    if match:
+        return _play_file(match)
+
+    # 3. Not found locally — search YouTube
+    speak(f"I don't have {query} yet. Let me search for it.")
+    options = _search_youtube(query, max_results=3)
+    if not options:
+        return f"Could not find {query} online either."
+
+    # Read out the options
+    options_text = ". ".join(
+        f"Option {i + 1}: {title}" for i, title in enumerate(options)
+    )
+    speak(f"I found {len(options)} options. {options_text}.")
+
+    # Pick one
+    chosen_idx = _pick_from_voice(options, _voice_mode)
+    chosen_title = options[chosen_idx]
+    speak(f"Downloading option {chosen_idx + 1}: {chosen_title}. Please wait.")
+
+    result = _download_by_title(chosen_title)
+    if "fail" in result.lower():
+        return result
+
+    # Find the newly downloaded file and play it
+    new_songs = sorted(glob(os.path.join(MUSIC_DIR, "*.mp3")))
+    new_file = next(
+        (s for s in new_songs if s not in songs),
+        new_songs[-1] if new_songs else None,
+    )
+    if not new_file:
+        return f"Downloaded but could not find the file to play."
+    return _play_file(new_file)
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +541,9 @@ def transcribe() -> str:
 # Main loop
 # ---------------------------------------------------------------------------
 def main() -> None:
+    global _voice_mode
     voice_mode = "--type" not in sys.argv
+    _voice_mode = voice_mode
 
     history: list = []
 
