@@ -201,23 +201,27 @@ def _pick_from_voice(options: list[str], voice_mode: bool) -> int:
     Returns the 0-based index of the chosen option.
     Falls back to option 0 if the input is not understood.
     """
-    speak("You can say option 1, 2, or 3. Or I will play the first one if I don't understand.")
+    if len(options) == 1:
+        return 0
+    numbers = " or ".join(str(i + 1) for i in range(len(options)))
+    speak(f"Say option {numbers}. If I don't understand, I'll play the first one.")
     try:
         if voice_mode:
             answer = transcribe()
         else:
-            answer = input("pick (1/2/3)> ").strip()
+            answer = input(f"pick (1-{len(options)})> ").strip()
     except Exception:
         return 0
 
     low = answer.lower()
-    # match "one"/"two"/"three" or "1"/"2"/"3" or "first"/"second"/"third"
-    for idx, words in enumerate([
+    word_sets = [
         ("1", "one", "first"),
         ("2", "two", "second"),
         ("3", "three", "third"),
-    ]):
-        if any(w in low for w in words):
+    ][: len(options)]
+    # check higher options first so "the second one" matches "second", not "one"
+    for idx in range(len(word_sets) - 1, -1, -1):
+        if any(w in low for w in word_sets[idx]):
             return idx
 
     # try matching any part of an option title
@@ -273,15 +277,15 @@ def play_song(query: str = "") -> str:
     if "fail" in result.lower():
         return result
 
-    # Find the newly downloaded file and play it
-    new_songs = sorted(glob(os.path.join(MUSIC_DIR, "*.mp3")))
-    new_file = next(
-        (s for s in new_songs if s not in songs),
-        new_songs[-1] if new_songs else None,
-    )
-    if not new_file:
-        return f"Downloaded but could not find the file to play."
-    return _play_file(new_file)
+    # Play the file that appeared during this call; if the song already
+    # existed under its YouTube title (yt-dlp skips duplicates), fall back
+    # to the newest file on disk rather than the alphabetically last one.
+    new_songs = glob(os.path.join(MUSIC_DIR, "*.mp3"))
+    fresh = [s for s in new_songs if s not in songs]
+    pool = fresh or new_songs
+    if not pool:
+        return "Downloaded but could not find the file to play."
+    return _play_file(max(pool, key=os.path.getmtime))
 
 
 # ---------------------------------------------------------------------------
@@ -370,14 +374,37 @@ SYSTEM = (
 # ---------------------------------------------------------------------------
 # Brain 1: Claude
 # ---------------------------------------------------------------------------
+MAX_HISTORY = 40  # entries, not exchanges — keeps long sessions fast and cheap
+
+
+def _trim_history(history: list) -> None:
+    """Drop the oldest turns once history grows past MAX_HISTORY.
+
+    After dropping, keep popping until the list starts at a plain-text user
+    message — the API rejects a history that opens with a tool_result whose
+    matching tool_use was trimmed away.
+    """
+    while len(history) > MAX_HISTORY:
+        history.pop(0)
+        while history and not (
+            history[0]["role"] == "user" and isinstance(history[0]["content"], str)
+        ):
+            history.pop(0)
+
+
 def claude_brain(user_text: str, history: list) -> str:
     history.append({"role": "user", "content": user_text})
+    _trim_history(history)
     while True:
         resp = client.messages.create(
             model=MODEL,
             max_tokens=512,
             system=SYSTEM,
             tools=TOOLS,
+            # Auto-cache the conversation prefix (tools + system + history).
+            # On Haiku the minimum cacheable prefix is 4096 tokens, so this
+            # kicks in once the session grows — exactly when it matters.
+            cache_control={"type": "ephemeral"},
             messages=history,
         )
         history.append({"role": "assistant", "content": resp.content})
@@ -435,6 +462,11 @@ def local_brain(user_text: str) -> str:
         if any(k in t for k in kw):
             m = re.search(r"(\d+(?:\.\d+)?)\s*(?:s|sec|second|seconds)?\b", t)
             return robot_drive(direction, float(m.group(1)) if m else 1.0)
+
+    # bare "turn" with no side given -> default left (papoi.py advertises "turn 1")
+    if "turn" in t:
+        m = re.search(r"(\d+(?:\.\d+)?)\s*(?:s|sec|second|seconds)?\b", t)
+        return robot_drive("left", float(m.group(1)) if m else 1.0)
 
     if any(w in t for w in ("hello", "hi", "hey")):
         return "Hi! I am running in offline mode."
@@ -502,8 +534,12 @@ def speak(text: str) -> None:
 # ---------------------------------------------------------------------------
 # Speech-to-text (Vosk, offline)
 # ---------------------------------------------------------------------------
+_vosk_model = None  # loaded once — Model() takes seconds and ~200MB RAM on a Pi 3
+
+
 def transcribe() -> str:
     """Listen on the mic until a complete phrase is detected, return the text."""
+    global _vosk_model
     if not _VOSK_AVAILABLE:
         raise RuntimeError(
             "Vosk not installed. Run: pip install vosk sounddevice\n"
@@ -516,8 +552,10 @@ def transcribe() -> str:
             "Download vosk-model-small-en-us-0.15.zip from https://alphacephei.com/vosk/models\n"
             "and unzip it to ~/vosk-model"
         )
-    model = Model(VOSK_MODEL_DIR)
-    rec = KaldiRecognizer(model, SAMPLE_RATE)
+    if _vosk_model is None:
+        print("[loading speech model...]")
+        _vosk_model = Model(VOSK_MODEL_DIR)
+    rec = KaldiRecognizer(_vosk_model, SAMPLE_RATE)
     q: queue.Queue = queue.Queue()
 
     def _cb(indata, frames, time_info, status):
