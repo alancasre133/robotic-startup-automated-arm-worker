@@ -31,8 +31,45 @@ grep -q '^dtoverlay=imx219' "$CONFIG" || echo 'dtoverlay=imx219' | sudo tee -a "
 echo "    Done (a reboot is required for the camera to appear)."
 
 echo
+echo
+echo "==> Installing audio tools (espeak-ng, aplay, mpg123)..."
+sudo apt install -y espeak-ng alsa-utils mpg123
+
+echo
+echo "==> Installing Python audio input (sounddevice)..."
+sudo apt install -y python3-sounddevice
+
+echo
+echo "==> Installing yt-dlp (song downloader)..."
+pip install --break-system-packages yt-dlp 2>/dev/null || pip install yt-dlp
+
+echo
+echo "==> Installing Vosk (offline speech recognition)..."
+pip install --break-system-packages vosk 2>/dev/null || pip install vosk
+
+echo
+echo "==> Vosk model setup..."
+VOSK_MODEL=~/vosk-model
+if [ ! -d "$VOSK_MODEL" ]; then
+    echo "    Downloading small English model (~40 MB)..."
+    wget -q https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip -O /tmp/vosk-model.zip
+    unzip -q /tmp/vosk-model.zip -d ~/
+    mv ~/vosk-model-small-en-us-0.15 "$VOSK_MODEL"
+    rm /tmp/vosk-model.zip
+    echo "    Vosk model installed at ~/vosk-model"
+else
+    echo "    Vosk model already present at ~/vosk-model — skipping."
+fi
+
+echo
+echo "==> Creating music folder..."
+mkdir -p ~/music
+
+echo
 echo "==> Setup complete. Reboot to load the camera:  sudo reboot"
 echo
 echo "After reboot:"
 echo "  - Verify the camera:  rpicam-hello --list-cameras   (should list imx219)"
 echo "  - Test the motors:    python3 robot_code/motor_test.py   (wheels off the ground)"
+echo "  - Run the assistant:  python3 robot_code/assistant.py    (voice mode)"
+echo "  - Keyboard mode:      python3 robot_code/assistant.py --type"

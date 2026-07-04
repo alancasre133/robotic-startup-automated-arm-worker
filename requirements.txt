@@ -1,0 +1,23 @@
+# Python dependencies for the robot
+# Install inside a venv that can see system packages:
+#   python3 -m venv --system-site-packages ~/venv
+#   source ~/venv/bin/activate
+#   pip install -r requirements.txt
+#
+# Or system-wide (Raspberry Pi OS Trixie):
+#   pip install --break-system-packages -r requirements.txt
+
+# Claude AI brain (optional — robot works offline without it)
+anthropic
+
+# Offline speech recognition
+vosk
+
+# Audio input
+sounddevice
+
+# Song downloader
+yt-dlp
+
+# gpiozero and picamera2 are installed via apt in setup.sh (system packages)
+# espeak-ng, mpg123, alsa-utils are also installed via apt
