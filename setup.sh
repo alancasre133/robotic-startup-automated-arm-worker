@@ -11,6 +11,12 @@ echo "==> Updating package lists..."
 sudo apt update
 
 echo
+echo "==> Installing pip (needed for yt-dlp / Vosk / arm libraries below)..."
+# Trixie doesn't put a `pip` binary on PATH by default — use `python3 -m pip`
+# everywhere below instead of bare `pip`, which fails with "command not found".
+sudo apt install -y python3-pip
+
+echo
 echo "==> Installing motor control libraries (gpiozero + lgpio)..."
 # Used by robot_code/motor_test.py to drive the L9110S from the Pi GPIO.
 sudo apt install -y python3-gpiozero python3-lgpio
@@ -37,15 +43,16 @@ sudo apt install -y espeak-ng alsa-utils mpg123
 
 echo
 echo "==> Installing Python audio input (sounddevice)..."
-sudo apt install -y python3-sounddevice
+# No python3-sounddevice package on Trixie's repos — install via pip instead.
+python3 -m pip install --break-system-packages sounddevice 2>/dev/null || python3 -m pip install sounddevice
 
 echo
 echo "==> Installing yt-dlp (song downloader)..."
-pip install --break-system-packages yt-dlp 2>/dev/null || pip install yt-dlp
+python3 -m pip install --break-system-packages yt-dlp 2>/dev/null || python3 -m pip install yt-dlp
 
 echo
 echo "==> Installing Vosk (offline speech recognition)..."
-pip install --break-system-packages vosk 2>/dev/null || pip install vosk
+python3 -m pip install --break-system-packages vosk 2>/dev/null || python3 -m pip install vosk
 
 echo
 echo "==> Vosk model setup..."
@@ -72,8 +79,8 @@ sudo apt install -y i2c-tools python3-smbus
 
 echo
 echo "==> Installing arm libraries (PCA9685 + servo control)..."
-pip install --break-system-packages adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka 2>/dev/null \
-    || pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka
+python3 -m pip install --break-system-packages adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka 2>/dev/null \
+    || python3 -m pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka
 
 echo
 echo "==> Setup complete. Reboot to load the camera + I2C:  sudo reboot"
