@@ -125,9 +125,51 @@ def robot_drive(direction: str, seconds: float = 1.0) -> str:
     return f"Drove {direction} for {secs} seconds."
 
 
+# ---------------------------------------------------------------------------
+# Hardware — arm (PCA9685 + servos, channels 0-4 in ARM_JOINTS order)
+# ---------------------------------------------------------------------------
+ARM_JOINTS = ("base", "shoulder", "elbow", "wrist", "gripper")
+
+try:
+    import board
+    import busio
+    from adafruit_pca9685 import PCA9685
+    from adafruit_motor import servo as _servo_lib
+    _ARM_LIBS_AVAILABLE = True
+except ImportError:
+    _ARM_LIBS_AVAILABLE = False
+
+_pca = None
+_arm_servos = {}
+
+
+def _ensure_arm():
+    """Connect to the PCA9685 on first arm command (mirrors _ensure_motors)."""
+    global _pca
+    if _pca is not None or not _ARM_LIBS_AVAILABLE:
+        return _pca
+    try:
+        i2c = busio.I2C(board.SCL, board.SDA)
+        pca = PCA9685(i2c)
+        pca.frequency = 50
+        for i, joint in enumerate(ARM_JOINTS):
+            _arm_servos[joint] = _servo_lib.Servo(pca.channels[i], min_pulse=500, max_pulse=2500)
+        _pca = pca
+    except Exception:
+        _pca = None
+    return _pca
+
+
 def robot_move_arm(joint: str, angle: float) -> str:
-    """Placeholder — PCA9685 + servos not connected yet."""
-    return f"Arm not connected yet — would move {joint} to {angle} degrees."
+    """Move one arm joint (PCA9685 servo) to an angle in degrees (0-180)."""
+    if not _ARM_LIBS_AVAILABLE:
+        return "Arm libraries not installed — see docs/arm-setup.md"
+    if _ensure_arm() is None:
+        return "Arm not connected (PCA9685 not found on I2C) — check wiring."
+    joint = joint if joint in ARM_JOINTS else "base"
+    angle = max(0.0, min(180.0, angle))
+    _arm_servos[joint].angle = angle
+    return f"Moved {joint} to {angle:.0f} degrees."
 
 
 # ---------------------------------------------------------------------------
@@ -421,9 +463,6 @@ def claude_brain(user_text: str, history: list) -> str:
 # ---------------------------------------------------------------------------
 # Brain 2: offline keyword rules
 # ---------------------------------------------------------------------------
-_JOINTS = ("base", "shoulder", "elbow", "wrist", "gripper")
-
-
 def local_brain(user_text: str) -> str:
     t = user_text.lower()
 
@@ -442,8 +481,8 @@ def local_brain(user_text: str) -> str:
         return user_text.strip()[4:].strip()
 
     # arm
-    if "arm" in t or any(j in t for j in _JOINTS):
-        joint = next((j for j in _JOINTS if j in t), "base")
+    if "arm" in t or any(j in t for j in ARM_JOINTS):
+        joint = next((j for j in ARM_JOINTS if j in t), "base")
         m = re.search(r"(-?\d+(?:\.\d+)?)", t)
         return robot_move_arm(joint, float(m.group(1)) if m else 90.0)
 

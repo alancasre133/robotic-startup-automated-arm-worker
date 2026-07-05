@@ -66,10 +66,22 @@ echo "==> Creating music folder..."
 mkdir -p ~/music
 
 echo
-echo "==> Setup complete. Reboot to load the camera:  sudo reboot"
+echo "==> Enabling I2C (for the arm's PCA9685 servo driver)..."
+sudo raspi-config nonint do_i2c 0
+sudo apt install -y i2c-tools python3-smbus
+
+echo
+echo "==> Installing arm libraries (PCA9685 + servo control)..."
+pip install --break-system-packages adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka 2>/dev/null \
+    || pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka
+
+echo
+echo "==> Setup complete. Reboot to load the camera + I2C:  sudo reboot"
 echo
 echo "After reboot:"
 echo "  - Verify the camera:  rpicam-hello --list-cameras   (should list imx219)"
 echo "  - Test the motors:    python3 robot_code/motor_test.py   (wheels off the ground)"
+echo "  - Verify the arm:     i2cdetect -y 1   (should show address 40)"
+echo "  - Test the arm:       python3 robot_code/arm_test.py   (arm free to move)"
 echo "  - Run the assistant:  python3 robot_code/assistant.py    (voice mode)"
 echo "  - Keyboard mode:      python3 robot_code/assistant.py --type"

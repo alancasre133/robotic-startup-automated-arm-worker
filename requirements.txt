@@ -19,5 +19,10 @@ sounddevice
 # Song downloader
 yt-dlp
 
+# Robot arm (PCA9685 + servos) — optional, robot works without the arm
+adafruit-circuitpython-pca9685
+adafruit-circuitpython-motor
+adafruit-blinka
+
 # gpiozero and picamera2 are installed via apt in setup.sh (system packages)
 # espeak-ng, mpg123, alsa-utils are also installed via apt
