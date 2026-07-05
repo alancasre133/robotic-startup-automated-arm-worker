@@ -52,7 +52,7 @@ import threading
 from time import sleep
 from glob import glob
 
-from gpiozero import Motor
+from gpiozero import Motor, OutputDevice
 
 try:
     import anthropic
@@ -87,6 +87,38 @@ if anthropic is not None and os.environ.get("ANTHROPIC_API_KEY"):
 # ---------------------------------------------------------------------------
 # Hardware — motors
 # ---------------------------------------------------------------------------
+# TEMPORARY WORKAROUND: Motor A's A-1A wire (GPIO16 -> L9110S A-1A) is loose or
+# disconnected — motor_diag.py showed that input floats HIGH no matter what the
+# Pi drives it to, so Motor A can only go FORWARD or STOP; it can't reverse.
+# (forward / right / spin / stop only ever ask Motor A to go forward or stop,
+# so those are unaffected — only backward/left, which need Motor A to reverse.)
+# Reseat the GPIO16 <-> A-1A jumper, confirm with motor_diag.py, then set this
+# back to False to return to normal two-direction control.
+MOTOR_A_FORWARD_ONLY = True
+
+
+class _ForwardOnlyMotor:
+    """Drop-in for gpiozero's Motor when only GPIO20 (A-1B) actually works.
+
+    Drives GPIO20 directly: LOW = spin forward, HIGH = stop/brake. backward()
+    can't truly reverse, so it just stops this side — the robot pivots around
+    the stopped wheel instead of turning symmetrically or backing up straight.
+    """
+
+    def __init__(self, pin):
+        self._pin = OutputDevice(pin)
+        self._pin.on()  # start stopped
+
+    def forward(self, speed=1):
+        self._pin.off()
+
+    def backward(self, speed=1):
+        self._pin.on()  # can't reverse — stop this side instead
+
+    def stop(self):
+        self._pin.on()
+
+
 motor_a = motor_b = None
 _music_proc = None          # currently playing mpg123 process
 
@@ -94,9 +126,18 @@ _music_proc = None          # currently playing mpg123 process
 def _ensure_motors():
     global motor_a, motor_b
     if motor_a is None:
-        motor_a = Motor(forward=16, backward=20, pwm=False)
+        motor_a = _ForwardOnlyMotor(20) if MOTOR_A_FORWARD_ONLY else Motor(forward=16, backward=20, pwm=False)
         motor_b = Motor(forward=27, backward=22, pwm=False)
     return motor_a, motor_b
+
+
+# WORKAROUND: motor A's A-1A wire (GPIO16) is loose/disconnected, so motor A
+# can only go forward or stop — it can never reverse (see motor_diag.py results:
+# GPIO16 has no effect; A only responds to A2/GPIO20 as forward-vs-stop). Until
+# that wire is reseated, any move needing a.backward() is downgraded to a.stop(),
+# turning a full two-wheel spin into a one-wheel pivot. Set this to False (or
+# delete the substitution below) once the wire is fixed.
+MOTOR_A_A1A_STUCK = True
 
 
 def robot_drive(direction: str, seconds: float = 1.0) -> str:
@@ -108,10 +149,11 @@ def robot_drive(direction: str, seconds: float = 1.0) -> str:
     if direction not in ("forward", "backward", "left", "right", "spin"):
         return f"Unknown direction: {direction}"
     a, b = _ensure_motors()
+    a_backward = a.stop if MOTOR_A_A1A_STUCK else a.backward
     moves = {
         "forward":  (a.forward,  b.forward),
-        "backward": (a.backward, b.backward),
-        "left":     (a.backward, b.forward),
+        "backward": (a_backward, b.backward),   # pivot on A, not a true reverse (see workaround above)
+        "left":     (a_backward, b.forward),    # pivot on A, wider turn than a full spin
         "right":    (a.forward,  b.backward),
         "spin":     (a.forward,  b.backward),   # full spin (right motors fwd, left bwd)
     }
@@ -122,7 +164,10 @@ def robot_drive(direction: str, seconds: float = 1.0) -> str:
     sleep(secs)
     a.stop()
     b.stop()
-    return f"Drove {direction} for {secs} seconds."
+    note = " (pivot, not a full turn — motor A's reverse wire is loose)" if (
+        MOTOR_A_A1A_STUCK and direction in ("backward", "left")
+    ) else ""
+    return f"Drove {direction} for {secs} seconds.{note}"
 
 
 # ---------------------------------------------------------------------------
