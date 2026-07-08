@@ -9,12 +9,13 @@ A Raspberry Pi 3 based robotic arm project.
 - ✅ **Remote access** — watch the camera **from anywhere over the internet** via Tailscale
 - 🧪 **Vision** — on-device **face detection + motor tracking** (experimental)
 - ✅ **Voice I/O** — USB speakerphone (mic + speaker) records + plays back
-- ✅ **Talk to it** — type a command → the robot acts + speaks, via a **Claude brain or a free offline fallback**
+- ✅ **Talk to it** — voice **or** typed commands → the robot acts + speaks, via a **Claude brain or a free offline fallback**
+- ✅ **Voice input** — offline speech-to-text (Vosk); talk to it, no typing needed
+- ✅ **Arm** — 6-DOF servo arm via a PCA9685 (base / shoulder / elbow / wrist / gripper) — all joints tested
+- ✅ **Obstacle sensing** — HC-SR04 ultrasonic (distance + stop-before-hitting)
+- ✅ **Music** — download + play songs by voice (yt-dlp + mpg123)
 - ✅ **Interactive face console** — `papoi.py` greets faces **and** takes live commands
 - ✅ **Reproducible** — setup steps, boot config, wiring, and code all live in this repo
-- ⏳ **Arm** — 6 servos via a PCA9685 (waiting on parts)
-- ⏳ **Voice input** — talk instead of type (mic → speech-to-text); the brain already works
-- ⏳ **Obstacle sensing** — HC-SR04 ultrasonic (on hand; needs a voltage divider on Echo)
 
 ## Build it from scratch
 
