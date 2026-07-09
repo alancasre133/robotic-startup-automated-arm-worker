@@ -165,10 +165,12 @@ Then SSH again and accept the new fingerprint.
 
 **Fix:**
 ```bash
-ssh alanacr@<pi-ip> "sudo -S bash -c 'apt-get update && apt-get upgrade -y'"
+ssh alanacr@<pi-ip> "sudo -S bash -c 'apt-get update && apt-get upgrade -y 2>&1 | tail -60'"
 # type your sudo password right after running this, then Enter — no visible prompt
 ```
 Then a normal `ssh alanacr@<pi-ip>` should work again.
+
+> **The general escape hatch this relies on:** when interactive login is broken, `ssh host "command"` (no `-t`) still works, because it never opens a real terminal session — it's exactly the path that's crashing that gets skipped. `sudo` normally needs a terminal for its password prompt, so plain `sudo` fails here with *"a terminal is required to read the password"* — the fix is `sudo -S`, which reads the password from stdin instead. Run the command, then **type your sudo password immediately** (it won't be masked/hidden, since there's no terminal to suppress the echo — fine for your own local network, not something to do over an untrusted connection). This isn't specific to the `apt upgrade` fix above — it's the general way to run **any** `sudo` command on the Pi while a normal login session is broken, useful for diagnosing whatever comes up next.
 
 **Why this looked so confusing, and how it was actually diagnosed** (useful if something similar happens again): normal logs (`journalctl -u ssh`, `dmesg`, PAM, AppArmor, `systemd --user`) all looked completely clean — the crash wasn't visible anywhere *until* we ran a one-shot debug `sshd` instance under `strace` on a spare port and watched the syscalls live:
 ```bash
