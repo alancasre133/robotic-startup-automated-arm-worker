@@ -57,7 +57,9 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 >
 > Pi → PCA9685 (I²C): `3.3V→VCC`, `GND→GND`, `SDA (pin 3)→SDA`, `SCL (pin 5)→SCL`.
 > Servos plug onto channels 0–5, in order: **base, shoulder, elbow, wrist,
-> wrist_rotate, gripper** (`ARM_JOINTS` in `robot_code/assistant.py`).
+> gripper, wrist_rotate** (`ARM_JOINTS` in `robot_code/assistant.py`) — the
+> first 5 channels were wired and tested before `wrist_rotate` was added, so
+> it's channel 5, not inserted before gripper.
 >
 > **Confirmed working:** 5 of 6 joints (base, shoulder, elbow, wrist, gripper)
 > pass [`robot_code/tests/arm_test.py`](robot_code/tests/arm_test.py) (center +

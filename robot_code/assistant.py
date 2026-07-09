@@ -173,7 +173,10 @@ def robot_drive(direction: str, seconds: float = 1.0) -> str:
 # ---------------------------------------------------------------------------
 # Hardware — arm (PCA9685 + servos, channels 0-5 in ARM_JOINTS order)
 # ---------------------------------------------------------------------------
-ARM_JOINTS = ("base", "shoulder", "elbow", "wrist", "wrist_rotate", "gripper")
+# wrist_rotate is LAST (channel 5), not inserted before gripper -- the first
+# 5 channels (base..gripper) were already wired and tested in that order;
+# putting wrist_rotate here keeps their channel numbers unchanged.
+ARM_JOINTS = ("base", "shoulder", "elbow", "wrist", "gripper", "wrist_rotate")
 
 try:
     import board
@@ -400,7 +403,7 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "joint": {"type": "string", "description": "base, shoulder, elbow, wrist, wrist_rotate, or gripper"},
+                "joint": {"type": "string", "description": "base, shoulder, elbow, wrist, gripper, or wrist_rotate"},
                 "angle": {"type": "number", "description": "Target angle 0-180 degrees."},
             },
             "required": ["joint", "angle"],
