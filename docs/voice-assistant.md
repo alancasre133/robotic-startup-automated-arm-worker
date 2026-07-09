@@ -1,41 +1,44 @@
 # Voice Assistant — Design
 
-The end goal: talk to the robot, and it listens, thinks, answers out loud, and
-acts (drives, moves the arm). This is the software plan for that.
+Talk to the robot: it listens, thinks, answers out loud, and acts (drives, moves
+the arm, plays music). Working end to end — see [robot_code/assistant.py](../robot_code/assistant.py).
 
 ## Pipeline
 
 ![Voice pipeline](voice-pipeline.svg)
 
 ```
-mic → speech-to-text → Claude (brain) → speak reply + act → listen again
+mic → Vosk speech-to-text → brain (Claude, or offline rules) → speak reply + act → listen again
 ```
 
 1. **Listen** — capture audio from the USB speakerphone mic.
-2. **Speech-to-text (STT)** — turn the audio into text.
-3. **Think** — send the text to the **Claude API**. Claude decides whether to
-   just talk or to *act*, and calls robot tools (`drive`, `move_arm`) when it
-   should move.
-4. **Act + speak** — run any tool calls (motors / arm) and read the reply aloud
-   through the USB speakerphone.
+2. **Speech-to-text (STT)** — **Vosk** (offline, on the Pi) turns audio into text.
+3. **Think** — the text goes to the brain, which decides whether to just talk or
+   to *act*, calling robot tools (`drive`, `move_arm`, `play_song`, …) when it
+   should. Two brains, automatic fallback: **Claude API** (smart, needs a key)
+   or **offline keyword rules** (free, no key/internet needed).
+4. **Act + speak** — run any tool calls (motors / arm / music) and read the
+   reply aloud through the USB speakerphone (Piper if installed, else espeak-ng).
 5. **Loop** — go back to listening.
 
-The Pi is the hands and ears; **Claude (in the cloud) is the thinking.** The Pi
-3A+ can't run a large model locally, so the intelligence lives in the API and
-the Pi just captures audio, calls it, and carries out the actions.
+Claude (when available) runs in the cloud — the Pi 3A+ can't run a large model
+locally — but the robot **always responds**, even fully offline: STT (Vosk), the
+fallback brain, and TTS (espeak-ng) all run on-device with no internet needed.
 
-## The brain — Claude API with tool use
+## The brain — Claude API with tool use (+ offline fallback)
 
-The code skeleton is [robot_code/assistant.py](../robot_code/assistant.py). It
-uses the Anthropic Python SDK and the **tool-use loop**: Claude receives the
-request and can call tools that map to robot functions.
+[robot_code/assistant.py](../robot_code/assistant.py) uses the Anthropic Python
+SDK and the **tool-use loop**: Claude receives the request and can call tools
+that map to robot functions. If no key is set (or a call fails), it falls back
+to `local_brain()` — a standard-library keyword parser with the same tools.
 
 Tools exposed to Claude:
 
 | Tool | Maps to | Status |
 |------|---------|--------|
-| `drive(direction, seconds)` | the L9110S motors | ✅ works once motors are wired |
-| `move_arm(joint, angle)` | a PCA9685 servo channel | ⏳ stub until the arm is wired |
+| `drive(direction, seconds)` | the L9110S motors | ✅ working |
+| `move_arm(joint, angle)` | a PCA9685 servo channel | ✅ working — all 5 joints tested |
+| `play_song(query)` / `download_song(query)` / `stop_music()` | mpg123 / yt-dlp | ✅ working |
 
 The loop: send transcript → if Claude returns `tool_use`, run the tool and feed
 the result back → repeat until Claude returns a normal reply → speak it.
@@ -81,8 +84,8 @@ installs — just run `python3 robot_code/assistant.py` with the system Python.
 
 | Option | Runs | Notes |
 |--------|------|-------|
-| **Vosk** | offline, on the Pi | Lightweight, works on the Pi 3, no internet needed. Good first choice. |
-| Cloud STT API | needs WiFi | Higher accuracy, more setup, per-use cost. |
+| **Vosk** | offline, on the Pi | ✅ **What we use.** Lightweight, works on the Pi 3, no internet needed. |
+| Cloud STT API | needs WiFi | Higher accuracy, more setup, per-use cost. Not used. |
 
 ## Text-to-speech (TTS) options
 
@@ -138,6 +141,8 @@ natural voice — install Piper + a voice model and point `PIPER_MODEL` at the
 1. ✅ Drive (motors) — done
 2. ✅ Audio I/O — USB speakerphone mic + speaker record/play back cleanly
 3. ✅ Text brain — type a command, robot acts + speaks (Claude, or offline fallback)
-4. ⏳ Arm (PCA9685 + servos)
-5. Voice — mic → Vosk speech-to-text so you talk instead of type
-6. Add the camera as another tool (let Claude "look" by sending a frame)
+4. ✅ Voice — mic → Vosk speech-to-text; talk instead of type (`assistant.py`, voice mode by default)
+5. ✅ Arm (PCA9685 + servos) — all 5 joints tested, wired into the assistant
+6. ✅ Obstacle sensing (HC-SR04) — stop/turn before hitting things
+7. ✅ Music — play/download songs by voice (yt-dlp + mpg123)
+8. ⏳ Add the camera as another tool (let Claude "look" by sending a frame)

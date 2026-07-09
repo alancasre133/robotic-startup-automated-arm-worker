@@ -38,7 +38,7 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > sensor works out of the box on Trixie. Match the ribbon cable to the Pi 3
 > (15-pin, standard CSI).
 
-## Planned — robotic arm
+## Robotic arm — working ✅
 
 | # | Component | Qty | What it's for | Approx. (MXN) |
 |---|-----------|-----|---------------|---------------|
@@ -56,7 +56,13 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > 5–6V UBEC (5A+)**.
 >
 > Pi → PCA9685 (I²C): `3.3V→VCC`, `GND→GND`, `SDA (pin 3)→SDA`, `SCL (pin 5)→SCL`.
-> Servos plug onto channels 0–5. See `robot_code/assistant.py` (`move_arm`).
+> Servos plug onto channels 0–4, in order: **base, shoulder, elbow, wrist, gripper**
+> (`ARM_JOINTS` in `robot_code/assistant.py`).
+>
+> **Confirmed working:** all 5 joints pass [`robot_code/arm_test.py`](robot_code/arm_test.py)
+> (center + a 60°↔120° sweep on each). `robot_move_arm()` in `assistant.py` drives
+> the same PCA9685 code path, so voice/typed commands like *"move the shoulder to
+> 45"* work end to end.
 
 ## Voice assistant (audio) — working ✅
 
@@ -75,7 +81,7 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > for both mic and speaker; record + playback tested. Setup / test commands are in
 > [docs/voice-assistant.md](docs/voice-assistant.md).
 
-## On hand — obstacle sensing (ultrasonic)
+## Obstacle sensing (ultrasonic) — working ✅
 
 | # | Component | Qty | What it's for | Approx. (MXN) |
 |---|-----------|-----|---------------|---------------|
@@ -85,10 +91,12 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > ⚠️ **Protect the Pi:** the HC-SR04's **Echo** pin outputs **5 V**, but Pi GPIO
 > tolerates only **3.3 V**. Put a voltage divider on Echo (`Echo →1 kΩ→ GPIO`, then
 > `GPIO →2 kΩ→ GND`) — or use an **HC-SR04*P*** / 3.3 V board and skip it.
-> Wiring: `VCC→5 V`, `GND→GND`, `Trig→` a free GPIO (e.g. **GPIO23**), `Echo→` a
-> free GPIO **via the divider** (e.g. **GPIO24**). Avoid the motor pins
-> (16, 20, 27, 22). `gpiozero`'s `DistanceSensor(echo=…, trigger=…)` reads it in a
-> couple of lines (`sensor.distance` is in metres).
+> Wiring: `VCC→5 V`, `GND→GND`, `Trig→` **GPIO23**, `Echo→` **GPIO24** via the
+> divider. Avoid the motor pins (16, 20, 27, 22).
+>
+> **Confirmed working:** [`robot_code/obstacle_avoid.py`](robot_code/obstacle_avoid.py)
+> reads distance with `gpiozero.DistanceSensor(echo=24, trigger=23)` and stops +
+> turns the robot when something is closer than 25 cm.
 
 ## Software / accounts
 

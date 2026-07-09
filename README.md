@@ -32,8 +32,9 @@ Each step links to the details further down (or to a file in the repo):
 9. **Stream the camera live** — `python3 robot_code/camera_stream.py`, then open `http://<pi-ip>:8000`
 10. **View from anywhere + auto-start on boot** — Tailscale + a systemd service: [docs/remote-access.md](docs/remote-access.md)
 11. **Talk to the robot** — `python3 robot_code/assistant.py` (works offline; add a key for the Claude brain) — see **Talk to the Robot**
-12. *(planned)* **Arm** — [docs/pico-setup.md](docs/pico-setup.md) + [docs/voice-assistant.md](docs/voice-assistant.md)
-13. *(planned)* **Voice input** — [docs/voice-assistant.md](docs/voice-assistant.md) + `robot_code/assistant.py`
+12. **Wire + test the arm** — see **HARDWARE.md → Robotic arm**, then `python3 robot_code/arm_test.py` (arm free to move)
+13. **Wire + test obstacle sensing** — see **HARDWARE.md → Obstacle sensing**, then `python3 robot_code/obstacle_avoid.py`
+14. **Talk with your voice** — `python3 robot_code/assistant.py` (voice mode is the default; `--type` for keyboard)
 
 ## Repository map
 
@@ -53,7 +54,10 @@ Each step links to the details further down (or to a file in the repo):
 | `robot_code/camera_stream.py` | Live camera stream to a browser |
 | `robot_code/vision_track.py` | Face detection + motor tracking + stream |
 | `robot_code/papoi.py` | Interactive face console — greets faces + takes live commands |
-| `robot_code/assistant.py` | Talk to the robot — Claude brain + free offline fallback |
+| `robot_code/assistant.py` | Talk to the robot — voice/text, Claude brain + offline fallback, arm, music |
+| `robot_code/arm_test.py` | Step-by-step PCA9685 + servo bring-up test |
+| `robot_code/obstacle_avoid.py` | Stop/turn before hitting things (HC-SR04) |
+| `robot_code/motor_diag.py` | Diagnose raw L9110S motor pin states |
 
 ---
 
@@ -368,41 +372,49 @@ reflexes with the Claude "brain" — is in [docs/vision.md](docs/vision.md).
 
 ## Talk to the Robot (assistant)
 
-Type a command and the robot **acts and talks back**. It has two brains with
-automatic fallback:
+Talk (or type) a command and the robot **drives, moves its arm, plays music, or
+just replies** — out loud. Two brains, automatic fallback:
 
-- **Claude API (smart)** — natural language, when an `ANTHROPIC_API_KEY` is set.
-- **Offline rules (free)** — a standard-library keyword parser; no key, no
-  internet, no pip installs. Used automatically if Claude isn't available.
+- **Claude API (smart)** — natural language, when `ANTHROPIC_API_KEY` is set.
+- **Offline rules (free)** — a keyword parser; no key, no internet, no extra
+  installs. Used automatically if Claude isn't available.
 
-Basic commands (`forward`, `back`, `left`, `right`, `turn`, `stop`, arm moves,
-`say ...`) always work — and `stop` acts instantly. Replies are spoken through the
-USB speaker (Piper if installed, else espeak-ng).
-
-**Run it (offline mode — nothing to install beyond the base setup):**
 ```bash
-python3 robot_code/assistant.py          # wheels OFF the ground — it can drive!
-# you> drive forward for 2 seconds
-# you> turn left, then say hello
+python3 robot_code/assistant.py           # VOICE mode — mic -> Vosk -> brain
+python3 robot_code/assistant.py --type    # TEXT  mode — keyboard -> brain
 ```
 
-**Add the Claude brain** (optional) — a venv that can still see the system
-`gpiozero`, plus your key:
-```bash
-python3 -m venv --system-site-packages ~/venv
-source ~/venv/bin/activate
-pip install anthropic
-export ANTHROPIC_API_KEY=sk-ant-...       # keep it secret; never commit it
-python3 robot_code/assistant.py
+Example commands (spoken or typed):
 ```
+move forward / go back / turn left / spin        -> drives the motors
+move the shoulder to 45 / open the gripper        -> moves the arm (PCA9685)
+play despacito / play a song                      -> plays from ~/music
+download despacito                                -> downloads via yt-dlp
+stop the music                                    -> stops playback
+say hello                                         -> speaks the text
+stop                                              -> stops motors instantly
+```
+
+Replies are spoken through the USB speaker (Piper if installed, else espeak-ng).
+
+**Setup** — voice mode needs Vosk + a small offline model + `sounddevice`; the
+Claude brain needs a key. `bash setup.sh` installs all of it (or run offline/text
+mode with nothing extra — it already works with the base install):
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...       # optional — keep it secret, never commit it
+```
+
+**Arm + obstacle sensing** — bring-up/test scripts before trusting them to the
+assistant: [robot_code/arm_test.py](robot_code/arm_test.py) (steps through each
+servo) and [robot_code/obstacle_avoid.py](robot_code/obstacle_avoid.py) (stops +
+turns before hitting something). See **HARDWARE.md** for wiring.
 
 **Interactive face console** — [robot_code/papoi.py](robot_code/papoi.py) does both
 at once: it watches the camera and greets faces (default: says "papoi", 5 s
-cooldown) **while** taking the same typed commands — including `when you see my
-face do X` to reprogram the greeting live.
+cooldown) **while** taking the same commands — including `when you see my face do
+X` to reprogram the greeting live.
 
 Design, STT/TTS options, and the roadmap: [docs/voice-assistant.md](docs/voice-assistant.md).
-The next step is **voice input** (mic → speech-to-text) so you talk instead of type.
 
 ---
 
