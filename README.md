@@ -157,6 +157,55 @@ Then SSH again and accept the new fingerprint.
 
 ---
 
+## Troubleshooting — SSH connects, authenticates, then closes immediately
+
+**Symptom:** `ssh alanacr@<pi-ip>` accepts your password (`Authenticated ... using "password"`) but the session dies right after — `Connection to ... closed by remote host`, no shell, no error text. Non-interactive commands still work fine (`ssh host "echo hi"` succeeds); only a *real* login (or `ssh -t`) fails. Often **intermittent** — sometimes power-cycling the Pi lets you back in, sometimes not.
+
+**Root cause (confirmed via `strace`):** a bug in `libwtmpdb0` (the library that logs login history to `/var/log/wtmp.db`, an SQLite file) segfaults every time a real terminal session is set up — `sudo apt` had 15 pending package updates that were never applied, and one of them carried the fix.
+
+**Fix:**
+```bash
+ssh alanacr@<pi-ip> "sudo -S bash -c 'apt-get update && apt-get upgrade -y'"
+# type your sudo password right after running this, then Enter — no visible prompt
+```
+Then a normal `ssh alanacr@<pi-ip>` should work again.
+
+**Why this looked so confusing, and how it was actually diagnosed** (useful if something similar happens again): normal logs (`journalctl -u ssh`, `dmesg`, PAM, AppArmor, `systemd --user`) all looked completely clean — the crash wasn't visible anywhere *until* we ran a one-shot debug `sshd` instance under `strace` on a spare port and watched the syscalls live:
+```bash
+# 1. start a debug sshd on a spare port, straced, logging to a file
+ssh alanacr@<pi-ip> "sudo -S bash -c 'nohup strace -f -tt -o /tmp/strace_sshd.log /usr/sbin/sshd -d -p 2223 -o PidFile=none > /tmp/sshd_debug.log 2>&1 & sleep 1; echo started'"
+# 2. trigger the failure against it
+ssh -t -p 2223 alanacr@<pi-ip> "echo test"
+# 3. read the trace — the failure will be right at the end
+ssh alanacr@<pi-ip> "tail -150 /tmp/strace_sshd.log"
+```
+That showed the exact crash: `pread64` on `/var/log/wtmp.db` immediately followed by `--- SIGSEGV ... +++ killed by SIGSEGV +++`. Deleting/recreating `wtmp.db` did **not** fix it (same crash, same address, on a totally empty file), which ruled out data corruption and pointed at the library build itself — confirming that only an update (not a data fix) would resolve it.
+
+**The bigger pattern — this SD card has a history of corruption.** This is at least the third time a package has come up corrupted on this specific card (also: `numpy`/`picamera2` failing an AppArmor parse early in the project, and `liblcms2-2`'s dpkg metadata going unreadable more recently). That's not coincidence — it points at a **degrading SD card** (worn flash / developing bad sectors), where each unclean power-loss event corrupts whatever happened to be mid-write. If you hit another unexplained crash or `dpkg: ... Bad message` error:
+1. Try the targeted fix first (`apt-get install --reinstall -y <package>`, clearing the specific corrupted file, etc. — cheap, sometimes enough).
+2. If corruption keeps recurring across *different* unrelated packages, stop patching symptoms — **reflash to a fresh SD card.** The whole setup is scripted (this repo + `setup.sh`), so a full rebuild takes ~20–30 minutes: flash a new card (**SD Card Setup & Required Boot Fix** above), boot it, `git clone` this repo, `bash setup.sh`, then redo the physical steps that aren't in git (Wi-Fi, Tailscale login, re-plugging the camera/motors/arm/sensor — wiring stays the same).
+3. **Always let a shutdown fully complete** (green LED off/steady) before cutting power — see **Powering Off the Pi Safely** below. Cutting power while the LED is still active is the most likely cause of this corruption in the first place.
+
+---
+
+## Powering Off the Pi Safely
+
+| Goal | Command | What happens |
+|---|---|---|
+| **Power off completely** | `sudo poweroff` or `sudo shutdown -h now` | Halts immediately, safely unmounts everything |
+| **Reboot** | `sudo reboot` or `sudo shutdown -r now` | Restarts on its own — no need to touch power |
+| ⚠️ **Avoid** | bare `sudo shutdown` (no arguments) | Schedules a halt **1 minute later** by default — easy to think nothing happened, and it doesn't reboot |
+
+**The critical step, regardless of command:** after running it, **wait for the green activity LED to stop blinking and go dark/steady** (~15–20 seconds) before pulling the power. That LED blinking means the SD card is still being written to — cutting power while it's active is very likely why this card keeps developing corruption (see **Troubleshooting** above).
+
+Full safe power-off sequence:
+```bash
+sudo poweroff
+```
+→ watch the LED → once it's dark/steady → **then** unplug the power bank. To power back on, just reconnect power — the Pi 3A+ has no power button.
+
+---
+
 ## Pinging the Pi
 
 ```bash
