@@ -27,16 +27,20 @@ Each step links to the details further down (or to a file in the repo):
 4. **Get the code onto the Pi** — see **Get the Code (git)**
 5. **Install software** — see **Software Setup**: `bash setup.sh`
 6. **Boot config** — match [config/config.txt](config/config.txt); apply steps in **Camera (IMX219)**
-7. **Wire + test motors** — see **Motors (L9110S)**, then `python3 robot_code/motor_test.py`
-8. **Test the camera** — see **Camera (IMX219)**, then `python3 robot_code/camera_test.py`
+7. **Wire + test motors** — see **Motors (L9110S)**, then `python3 robot_code/tests/motor_test.py`
+8. **Test the camera** — see **Camera (IMX219)**, then `python3 robot_code/tests/camera_test.py`
 9. **Stream the camera live** — `python3 robot_code/camera_stream.py`, then open `http://<pi-ip>:8000`
 10. **View from anywhere + auto-start on boot** — Tailscale + a systemd service: [docs/remote-access.md](docs/remote-access.md)
 11. **Talk to the robot** — `python3 robot_code/assistant.py` (works offline; add a key for the Claude brain) — see **Talk to the Robot**
-12. **Wire + test the arm** — see **HARDWARE.md → Robotic arm**, then `python3 robot_code/arm_test.py` (arm free to move)
+12. **Wire + test the arm** — see **HARDWARE.md → Robotic arm**, then `python3 robot_code/tests/arm_test.py` (arm free to move)
 13. **Wire + test obstacle sensing** — see **HARDWARE.md → Obstacle sensing**, then `python3 robot_code/obstacle_avoid.py`
 14. **Talk with your voice** — `python3 robot_code/assistant.py` (voice mode is the default; `--type` for keyboard)
 
 ## Repository map
+
+`robot_code/` holds the real, ongoing programs; `robot_code/tests/` holds one-off
+bring-up/diagnostic scripts used to verify wiring before trusting it to the
+real programs.
 
 | Path | What it is |
 |------|-----------|
@@ -49,15 +53,16 @@ Each step links to the details further down (or to a file in the repo):
 | `docs/pico-setup.md` | Pico W MicroPython flashing |
 | `docs/remote-access.md` | View the camera from anywhere (Tailscale) |
 | `docs/vision.md` | AI vision — faces / objects / hands + roadmap |
-| `robot_code/motor_test.py` | Drive both motors (test) |
-| `robot_code/camera_test.py` | Capture a still photo |
+| `robot_code/assistant.py` | Talk to the robot — voice/text, Claude brain + offline fallback, arm, music |
 | `robot_code/camera_stream.py` | Live camera stream to a browser |
 | `robot_code/vision_track.py` | Face detection + motor tracking + stream |
 | `robot_code/papoi.py` | Interactive face console — greets faces + takes live commands |
-| `robot_code/assistant.py` | Talk to the robot — voice/text, Claude brain + offline fallback, arm, music |
-| `robot_code/arm_test.py` | Step-by-step PCA9685 + servo bring-up test |
 | `robot_code/obstacle_avoid.py` | Stop/turn before hitting things (HC-SR04) |
-| `robot_code/motor_diag.py` | Diagnose raw L9110S motor pin states |
+| `robot_code/tests/motor_test.py` | Drive both motors (bring-up test) |
+| `robot_code/tests/motor_diag.py` | Diagnose raw L9110S motor pin states |
+| `robot_code/tests/camera_test.py` | Capture a still photo |
+| `robot_code/tests/arm_test.py` | Step-by-step PCA9685 + servo bring-up test |
+| `robot_code/tests/hello.py` | Trivial "Python works" smoke test |
 
 ---
 
@@ -343,7 +348,7 @@ The Pi is powered separately by a USB power bank.
 Test (wheels off the ground):
 
 ```bash
-python3 robot_code/motor_test.py
+python3 robot_code/tests/motor_test.py
 ```
 
 **Gotcha — WiFi drops when motors run:** if the motor return current flows
@@ -380,7 +385,7 @@ Copy the photo to your computer to view it (run on your PC, not the Pi):
 scp alanacr@<pi-ip>:~/test.jpg .
 ```
 
-Or capture from Python: [robot_code/camera_test.py](robot_code/camera_test.py).
+Or capture from Python: [robot_code/tests/camera_test.py](robot_code/tests/camera_test.py).
 
 **Live stream to a browser** (no screen on the Pi needed) — run it with system
 Python, then open the URL on any device on the same WiFi:
@@ -456,7 +461,7 @@ export ANTHROPIC_API_KEY=sk-ant-...       # optional — keep it secret, never c
 ```
 
 **Arm + obstacle sensing** — bring-up/test scripts before trusting them to the
-assistant: [robot_code/arm_test.py](robot_code/arm_test.py) (steps through each
+assistant: [robot_code/tests/arm_test.py](robot_code/tests/arm_test.py) (steps through each
 servo) and [robot_code/obstacle_avoid.py](robot_code/obstacle_avoid.py) (stops +
 turns before hitting something). See **HARDWARE.md** for wiring.
 

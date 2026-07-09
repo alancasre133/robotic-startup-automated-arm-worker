@@ -5,7 +5,7 @@ It drives the four L9110S input pins directly (no PWM, no Motor class) and pause
 at each step so you can WATCH the wheels and report what happens.
 
 Run with the WHEELS OFF THE GROUND:
-    python3 robot_code/motor_diag.py
+    python3 robot_code/tests/motor_diag.py
 
 For each step, note SPIN or STOP. The important ones:
   - the moment it starts (all pins LOW)  -> spinning already?

@@ -15,7 +15,7 @@ Dependencies (Raspberry Pi OS Lite):
     sudo apt install -y python3-gpiozero python3-lgpio
 
 Run:
-    python3 motor_test.py
+    python3 robot_code/tests/motor_test.py
 """
 
 from gpiozero import Motor

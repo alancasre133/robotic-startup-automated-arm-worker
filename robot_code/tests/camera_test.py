@@ -10,7 +10,7 @@ Requires:
     (see the "Camera (IMX219)" section of README.md)
 
 Run:
-    python3 camera_test.py
+    python3 robot_code/tests/camera_test.py
 
 Then copy it to your computer to view (from your PC, not the Pi):
     scp alanacr@<pi-ip>:~/camera_test.jpg .

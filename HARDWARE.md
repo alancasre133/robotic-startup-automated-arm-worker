@@ -59,7 +59,7 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > Servos plug onto channels 0–4, in order: **base, shoulder, elbow, wrist, gripper**
 > (`ARM_JOINTS` in `robot_code/assistant.py`).
 >
-> **Confirmed working:** all 5 joints pass [`robot_code/arm_test.py`](robot_code/arm_test.py)
+> **Confirmed working:** all 5 joints pass [`robot_code/tests/arm_test.py`](robot_code/tests/arm_test.py)
 > (center + a 60°↔120° sweep on each). `robot_move_arm()` in `assistant.py` drives
 > the same PCA9685 code path, so voice/typed commands like *"move the shoulder to
 > 45"* work end to end.
@@ -128,5 +128,5 @@ Pi GPIO → L9110S (BCM numbers):
 Power: battery **+** → L9110S **VCC**, battery **−** → Pi **pin 9** (GND).
 The Pi is powered separately by the USB power bank.
 
-See [`robot_code/motor_test.py`](robot_code/motor_test.py) for the matching code,
+See [`robot_code/tests/motor_test.py`](robot_code/tests/motor_test.py) for the matching code,
 and run [`setup.sh`](setup.sh) once to install dependencies.
