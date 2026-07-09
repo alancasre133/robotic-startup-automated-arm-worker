@@ -22,7 +22,7 @@ A Raspberry Pi 3 based robotic arm project.
 Each step links to the details further down (or to a file in the repo):
 
 1. **Get the parts** — [HARDWARE.md](HARDWARE.md) (bill of materials + wiring diagram)
-2. **Flash the SD card** — see **Requirements**, then **SD Card Setup & Required Boot Fix**
+2. **Flash the SD card** — see **Requirements**, then **SD Card Setup**
 3. **First boot + connect** — see **First Boot**, then **Connecting via SSH**
 4. **Get the code onto the Pi** — see **Get the Code (git)**
 5. **Install software** — see **Software Setup**: `bash setup.sh`
@@ -82,50 +82,41 @@ real programs.
 
 ---
 
-## SD Card Setup & Required Boot Fix
+## SD Card Setup
 
-After flashing the SD card with Raspberry Pi Imager, the `bootfs` partition is mounted on your computer. You **must** apply the following fix before inserting the card into the Pi.
+Flash the card with Raspberry Pi Imager (see **Requirements** above for the OS
+choice), then just insert it and boot — no manual editing needed on a current
+Imager version. Wi-Fi credentials entered in Imager's settings work as-is.
 
-### Problem
-Raspberry Pi Imager stores the Wi-Fi password as a **pre-hashed WPA PSK** (64-character hex string) in `network-config`. This format is not accepted by cloud-init/netplan, causing Wi-Fi to silently fail on first boot — the Pi will not connect to the network.
+<details>
+<summary>If Wi-Fi doesn't connect on first boot (older Imager versions)</summary>
 
-### Fix — Edit `network-config` on the bootfs partition
+Older releases of Raspberry Pi Imager stored the Wi-Fi password as a
+**pre-hashed WPA PSK** (64-character hex string) in `network-config`, which
+cloud-init/netplan rejects — Wi-Fi would silently fail with no error. If you
+hit this:
 
-1. Open the `network-config` file on the mounted `bootfs` volume:
+1. Open `network-config` on the mounted `bootfs` partition:
+   ```
+   /Volumes/bootfs/network-config
+   ```
+2. Find the password field — broken form looks like:
+   ```yaml
+   wifis:
+     wlan0:
+       dhcp4: true
+       access-points:
+         "YOUR_WIFI_SSID":
+           password: "5afe08be3851c35e23c2d3c6dea7fcf02e1db90580d3c525085f87a7ec62988a"
+       optional: true
+   ```
+3. Replace it with your **plain-text** Wi-Fi password, save, and safely eject
+   the card before inserting it into the Pi.
 
-```
-/Volumes/bootfs/network-config
-```
+Ethernet (`eth0`) always works via DHCP regardless — plugging in a cable
+sidesteps this entirely.
 
-2. Find the Wi-Fi password field — it will look like this (broken):
-
-```yaml
-wifis:
-  wlan0:
-    dhcp4: true
-    regulatory-domain: "US"
-    access-points:
-      "YOUR_WIFI_SSID":
-        password: "5afe08be3851c35e23c2d3c6dea7fcf02e1db90580d3c525085f87a7ec62988a"
-    optional: true
-```
-
-3. Replace the hashed password with your **plain-text Wi-Fi password**:
-
-```yaml
-wifis:
-  wlan0:
-    dhcp4: true
-    regulatory-domain: "US"
-    access-points:
-      "YOUR_WIFI_SSID":
-        password: "your_actual_wifi_password"
-    optional: true
-```
-
-4. Save the file and **safely eject** the SD card before inserting it into the Pi.
-
-> **Note:** Ethernet (`eth0`) is configured with DHCP and works without any fix — if you plug the Pi directly into your router via cable, it will connect automatically without needing this fix.
+</details>
 
 ---
 
@@ -191,7 +182,7 @@ That showed the exact crash: `pread64` on `/var/log/wtmp.db` immediately followe
 
 **The bigger pattern — this SD card has a history of corruption.** This is at least the third time a package has come up corrupted on this specific card (also: `numpy`/`picamera2` failing an AppArmor parse early in the project, and `liblcms2-2`'s dpkg metadata going unreadable more recently). That's not coincidence — it points at a **degrading SD card** (worn flash / developing bad sectors), where each unclean power-loss event corrupts whatever happened to be mid-write. If you hit another unexplained crash or `dpkg: ... Bad message` error:
 1. Try the targeted fix first (`apt-get install --reinstall -y <package>`, clearing the specific corrupted file, etc. — cheap, sometimes enough).
-2. If corruption keeps recurring across *different* unrelated packages, stop patching symptoms — **reflash to a fresh SD card.** The whole setup is scripted (this repo + `setup.sh`), so a full rebuild takes ~20–30 minutes: flash a new card (**SD Card Setup & Required Boot Fix** above), boot it, `git clone` this repo, `bash setup.sh`, then redo the physical steps that aren't in git (Wi-Fi, Tailscale login, re-plugging the camera/motors/arm/sensor — wiring stays the same).
+2. If corruption keeps recurring across *different* unrelated packages, stop patching symptoms — **reflash to a fresh SD card.** The whole setup is scripted (this repo + `setup.sh`), so a full rebuild takes ~20–30 minutes: flash a new card (**SD Card Setup** above), boot it, `git clone` this repo, `bash setup.sh`, then redo the physical steps that aren't in git (Wi-Fi, Tailscale login, re-plugging the camera/motors/arm/sensor — wiring stays the same).
 3. **Always let a shutdown fully complete** (green LED off/steady) before cutting power — see **Powering Off the Pi Safely** below. Cutting power while the LED is still active is the most likely cause of this corruption in the first place.
 
 ---
