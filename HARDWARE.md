@@ -61,12 +61,13 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > first 5 channels were wired and tested before `wrist_rotate` was added, so
 > it's channel 5, not inserted before gripper.
 >
-> **Confirmed working:** 5 of 6 joints (base, shoulder, elbow, wrist, gripper)
-> pass [`robot_code/tests/arm_test.py`](robot_code/tests/arm_test.py) (center +
-> a 60°↔120° sweep on each). The 6th axis, **wrist_rotate** (channel 5), still
-> needs to be wired and run through `arm_test.py` to confirm. `robot_move_arm()`
-> in `assistant.py` drives the same PCA9685 code path, so voice/typed commands
-> like *"move the shoulder to 45"* work end to end for the tested joints.
+> **Confirmed working:** all 6 joints — including `wrist_rotate` (channel 5) —
+> move correctly via [`robot_code/tests/arm_test.py`](robot_code/tests/arm_test.py)
+> and [`robot_code/tests/arm_jog_test.py`](robot_code/tests/arm_jog_test.py).
+> (One early gripper wiring issue turned out to be a loose connector, not a
+> code or channel problem.) `robot_move_arm()` in `assistant.py` drives the
+> same PCA9685 code path, so voice/typed commands like *"move the shoulder to
+> 45"* work end to end.
 
 ## Voice assistant (audio) — working ✅
 

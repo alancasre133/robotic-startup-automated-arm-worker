@@ -37,7 +37,7 @@ Tools exposed to Claude:
 | Tool | Maps to | Status |
 |------|---------|--------|
 | `drive(direction, seconds)` | the L9110S motors | ✅ working |
-| `move_arm(joint, angle)` | a PCA9685 servo channel | ✅ working — 5 of 6 joints tested (wrist_rotate still to wire/test) |
+| `move_arm(joint, angle)` | a PCA9685 servo channel | ✅ working — all 6 joints tested |
 | `play_song(query)` / `download_song(query)` / `stop_music()` | mpg123 / yt-dlp | ✅ working |
 
 The loop: send transcript → if Claude returns `tool_use`, run the tool and feed
@@ -142,7 +142,7 @@ natural voice — install Piper + a voice model and point `PIPER_MODEL` at the
 2. ✅ Audio I/O — USB speakerphone mic + speaker record/play back cleanly
 3. ✅ Text brain — type a command, robot acts + speaks (Claude, or offline fallback)
 4. ✅ Voice — mic → Vosk speech-to-text; talk instead of type (`assistant.py`, voice mode by default)
-5. ✅ Arm (PCA9685 + servos) — 5 of 6 joints tested, wired into the assistant (wrist_rotate still to wire/test)
+5. ✅ Arm (PCA9685 + servos) — all 6 joints tested, wired into the assistant
 6. ✅ Obstacle sensing (HC-SR04) — stop/turn before hitting things
 7. ✅ Music — play/download songs by voice (yt-dlp + mpg123)
 8. ⏳ Add the camera as another tool (let Claude "look" by sending a frame)
