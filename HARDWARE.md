@@ -56,13 +56,15 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > 5–6V UBEC (5A+)**.
 >
 > Pi → PCA9685 (I²C): `3.3V→VCC`, `GND→GND`, `SDA (pin 3)→SDA`, `SCL (pin 5)→SCL`.
-> Servos plug onto channels 0–4, in order: **base, shoulder, elbow, wrist, gripper**
-> (`ARM_JOINTS` in `robot_code/assistant.py`).
+> Servos plug onto channels 0–5, in order: **base, shoulder, elbow, wrist,
+> wrist_rotate, gripper** (`ARM_JOINTS` in `robot_code/assistant.py`).
 >
-> **Confirmed working:** all 5 joints pass [`robot_code/tests/arm_test.py`](robot_code/tests/arm_test.py)
-> (center + a 60°↔120° sweep on each). `robot_move_arm()` in `assistant.py` drives
-> the same PCA9685 code path, so voice/typed commands like *"move the shoulder to
-> 45"* work end to end.
+> **Confirmed working:** 5 of 6 joints (base, shoulder, elbow, wrist, gripper)
+> pass [`robot_code/tests/arm_test.py`](robot_code/tests/arm_test.py) (center +
+> a 60°↔120° sweep on each). The 6th axis, **wrist_rotate** (channel 5), still
+> needs to be wired and run through `arm_test.py` to confirm. `robot_move_arm()`
+> in `assistant.py` drives the same PCA9685 code path, so voice/typed commands
+> like *"move the shoulder to 45"* work end to end for the tested joints.
 
 ## Voice assistant (audio) — working ✅
 

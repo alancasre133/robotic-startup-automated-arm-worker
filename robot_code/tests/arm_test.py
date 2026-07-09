@@ -51,7 +51,7 @@ def main():
         print(f"   {joint} back at 90. Did it move smoothly and in the right direction?")
 
     print("\nAll joints tested. If one moved the wrong way, or not at all, check that")
-    print("servo's channel number (0-4, in ARM_JOINTS order) and connector orientation.")
+    print("servo's channel number (0-5, in ARM_JOINTS order) and connector orientation.")
 
 
 if __name__ == "__main__":

@@ -171,9 +171,9 @@ def robot_drive(direction: str, seconds: float = 1.0) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Hardware — arm (PCA9685 + servos, channels 0-4 in ARM_JOINTS order)
+# Hardware — arm (PCA9685 + servos, channels 0-5 in ARM_JOINTS order)
 # ---------------------------------------------------------------------------
-ARM_JOINTS = ("base", "shoulder", "elbow", "wrist", "gripper")
+ARM_JOINTS = ("base", "shoulder", "elbow", "wrist", "wrist_rotate", "gripper")
 
 try:
     import board
@@ -400,7 +400,7 @@ TOOLS = [
         "input_schema": {
             "type": "object",
             "properties": {
-                "joint": {"type": "string", "description": "base, shoulder, elbow, wrist, or gripper"},
+                "joint": {"type": "string", "description": "base, shoulder, elbow, wrist, wrist_rotate, or gripper"},
                 "angle": {"type": "number", "description": "Target angle 0-180 degrees."},
             },
             "required": ["joint", "angle"],
@@ -525,9 +525,16 @@ def local_brain(user_text: str) -> str:
     if t.startswith("say "):
         return user_text.strip()[4:].strip()
 
-    # arm
-    if "arm" in t or any(j in t for j in ARM_JOINTS):
-        joint = next((j for j in ARM_JOINTS if j in t), "base")
+    # arm — check longer/more specific joint names first (e.g. "wrist_rotate"
+    # before "wrist", since "wrist" is a substring of it) and accept "wrist
+    # rotate" (spoken/typed with a space) as well as the underscored form.
+    _joints_by_specificity = sorted(ARM_JOINTS, key=len, reverse=True)
+
+    def _joint_in_text(j):
+        return j in t or j.replace("_", " ") in t
+
+    if "arm" in t or any(_joint_in_text(j) for j in ARM_JOINTS):
+        joint = next((j for j in _joints_by_specificity if _joint_in_text(j)), "base")
         m = re.search(r"(-?\d+(?:\.\d+)?)", t)
         return robot_move_arm(joint, float(m.group(1)) if m else 90.0)
 
