@@ -62,6 +62,7 @@ real programs.
 | `robot_code/tests/motor_diag.py` | Diagnose raw L9110S motor pin states |
 | `robot_code/tests/camera_test.py` | Capture a still photo |
 | `robot_code/tests/arm_test.py` | Step-by-step PCA9685 + servo bring-up test |
+| `robot_code/tests/arm_jog_test.py` | Jog each servo live with arrow keys (Enter/`b` to switch joints) |
 | `robot_code/tests/hello.py` | Trivial "Python works" smoke test |
 
 ---
