@@ -175,7 +175,7 @@ Pi → HC-SR04 (physical pin numbers):
 | VCC  | 2  | 5V |
 | GND  | 34 | |
 | Trig | 33 | GPIO13 (BCM) |
-| Echo | 35 | GPIO19 (BCM) — **through the 1kΩ/2kΩ voltage divider**, not direct |
+| Echo | 35 | GPIO19 (BCM) — **through the 1kΩ/2kΩ voltage divider**, not direct: `Echo -> 1kΩ resistor -> (M-F jumper to pin 35) -> 2kΩ resistor -> (M-F jumper to pin 39, GND)` |
 
 USB topology (Pi 3A+ has one USB-A data port + one micro-USB power port):
 
