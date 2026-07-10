@@ -87,15 +87,23 @@ echo "==> Patching vosk's native library (executable-stack workaround)..."
 #   OSError: cannot enable executable stack as shared object requires
 # on Debian trixie/armhf -- modern glibc refuses to load a shared object that
 # requests an executable stack. Clear that ELF flag so it loads cleanly.
-apt_install execstack
+# NOTE: `execstack` itself is NOT in Trixie's repos (apt install execstack ->
+# "Unable to locate package", confirmed on-device -- it was dropped from
+# Debian). Use `patchelf --clear-execstack` instead, which IS packaged.
+apt_install patchelf
 VOSK_SO=$(python3 -c "import vosk, os; print(os.path.join(os.path.dirname(vosk.__file__), 'libvosk.so'))" 2>/dev/null)
 if [ -n "$VOSK_SO" ] && [ -f "$VOSK_SO" ]; then
-    execstack -c "$VOSK_SO"
-    echo "    Patched $VOSK_SO"
+    patchelf --clear-execstack "$VOSK_SO"
+    if python3 -c "from vosk import Model" 2>/dev/null; then
+        echo "    Patched $VOSK_SO"
+    else
+        echo "    !! Patch did not take on $VOSK_SO -- voice mode may still fail."
+        FAILURES+=("patchelf --clear-execstack $VOSK_SO (still fails to load after patch)")
+    fi
 else
     echo "    Could not locate libvosk.so -- if voice mode later fails with"
     echo "    'cannot enable executable stack', find it and run:"
-    echo "    execstack -c /path/to/vosk/libvosk.so"
+    echo "    patchelf --clear-execstack /path/to/vosk/libvosk.so"
 fi
 
 echo
@@ -103,11 +111,32 @@ echo "==> Vosk model setup..."
 VOSK_MODEL=~/vosk-model
 if [ ! -d "$VOSK_MODEL" ]; then
     echo "    Downloading small English model (~40 MB)..."
-    wget -q https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip -O /tmp/vosk-model.zip
-    unzip -q /tmp/vosk-model.zip -d ~/
-    mv ~/vosk-model-small-en-us-0.15 "$VOSK_MODEL"
-    rm /tmp/vosk-model.zip
-    echo "    Vosk model installed at ~/vosk-model"
+    attempt=1
+    max_attempts=3
+    model_ok=0
+    while [ "$attempt" -le "$max_attempts" ]; do
+        rm -f /tmp/vosk-model.zip
+        rm -rf ~/vosk-model-small-en-us-0.15
+        if wget -q https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip -O /tmp/vosk-model.zip \
+            && unzip -q /tmp/vosk-model.zip -d ~/ \
+            && mv ~/vosk-model-small-en-us-0.15 "$VOSK_MODEL"; then
+            model_ok=1
+            break
+        fi
+        echo "    Download/extract failed (attempt $attempt/$max_attempts)"
+        if [ "$attempt" -lt "$max_attempts" ]; then
+            echo "    retrying in 5s..."
+            sleep 5
+        fi
+        attempt=$((attempt + 1))
+    done
+    rm -f /tmp/vosk-model.zip
+    if [ "$model_ok" -eq 1 ] && [ -d "$VOSK_MODEL" ]; then
+        echo "    Vosk model installed at ~/vosk-model"
+    else
+        echo "    !! Giving up on the Vosk model download."
+        FAILURES+=("Vosk model download (wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip)")
+    fi
 else
     echo "    Vosk model already present at ~/vosk-model — skipping."
 fi
