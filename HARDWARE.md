@@ -18,7 +18,7 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 |---|-----------|-----|---------------|---------------|
 | 1 | Raspberry Pi 3 (Model A+, 3B, or 3B+) | 1 | The brain — runs the control code | 700–1000 |
 | 2 | microSD card, 16 GB+ (Class 10/A1) | 1 | Operating system (Raspberry Pi OS Lite, Trixie) | 120–200 |
-| 3 | USB power bank, 5V / 2A+ | 1 | Powers the Pi (kept separate from motor power) | 200–450 |
+| 3 | USB power bank, 5V / 2A+ — bought: [Redmi 20000mAh 18W Fast Charge Power Bank](https://www.mercadolibre.com.mx/20000mah-redmi-18w-fast-charge-power-bank-black/p/MLM21029066) | 1 | Powers the Pi (kept separate from motor power) | 200–450 |
 | 4 | 2WD robot car chassis kit | 1 | Frame, 2× TT gear motors, 2 wheels, caster, AA holder | 150–350 |
 | 5 | L9110S dual H-bridge motor driver | 1 | Lets the Pi drive both motors forward/back | 30–60 |
 | 6 | AA batteries | 4 | Motor power (~6V), via the holder in the kit | 40–80 |
@@ -44,7 +44,7 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 | 10 | PCA9685 16-channel servo driver — bought: [MLM2040047104](https://www.mercadolibre.com.mx/pca9685-modulo-pwm-16-canales-12-bits-i2c/p/MLM2040047104) | 1 | Drives the servos over I²C (the Pi has only 2 hardware PWM pins) | 60–100 |
 | 11 | 6V 2200 mAh NiMH battery pack — bought: **Blomiky 2-pack, SM-2P plug + USB charging cable** | 1 (or 2-pack) | Servo power (5–6V). MG996R are current-hungry — never run off the Pi | ~560 (2-pack) |
 | 12 | SM-2P connector pair (pigtail) — bought: **yueton 10-pair SM-2P male/female** | 1 | Adapts the battery's SM plug to the PCA9685 screw terminal without cutting it | ~100 |
-| — | Raspberry Pi Pico W *(alternative)* | 1 | Can generate the servo PWM instead of the PCA9685 — see [docs/pico-setup.md](docs/pico-setup.md) | 120–180 |
+| — | Raspberry Pi Pico *(alternative)* — bought: [Pico RP2040 Dual Core, USB-C + cable](https://www.mercadolibre.com.mx/tarjeta-raspberry-pi-pico-rp2040-dual-core-tipo-c-cable/p/MLM2055242423) | 1 | Can generate the servo PWM instead of the PCA9685 — see [docs/pico-setup.md](docs/pico-setup.md) | 120–180 |
 
 > **Servo power:** a 6V NiMH pack connects **straight to the PCA9685 V+** (no
 > regulator — 6V is in the MG996R range). **Don't cut the battery's SM plug** (the
@@ -73,8 +73,8 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 
 | # | Component | Qty | What it's for | Approx. (MXN) |
 |---|-----------|-----|---------------|---------------|
-| 13 | USB conference speakerphone (mic + speaker) | 1 | Voice in **and** out over one USB plug (e.g. Techwolf TWA-Y02) | ~470 |
-| 14 | USB hub (USB-A) | 1 | The Pi 3A+ has one USB port — the hub runs the speakerphone + Pico together | ~120 |
+| 13 | USB conference speakerphone (mic + speaker) — bought: [Techwolf Omnidirectional USB Desktop Microphone + Speaker](https://www.mercadolibre.com.mx/microfono-de-escritorio-omnidireccional-usb-techwolf-con-altavoz-para-conferencias-y-videollamadas-en-pc/p/MLM59321964) | 1 | Voice in **and** out over one USB plug | ~470 |
+| 14 | USB hub — bought: [Jeeyee 4-Port USB 3.0 Hub, 5Gbps](https://www.mercadolibre.com.mx/jeeyee-puertos-usb-hub-usb-30-5gbps-4-puertos-alta-velocidad-con-proteccion-de-sobrecarga-para-laptop-pc-color-gris/p/MLM36222600) | 1 | The Pi 3A+ has one USB port — the hub runs the speakerphone + Pico together | ~120 |
 
 > **We chose USB audio over the I²S kit.** The INMP441 + MAX98357 boards need
 > their headers **soldered** and would collide with Motor A on GPIO20. A USB
