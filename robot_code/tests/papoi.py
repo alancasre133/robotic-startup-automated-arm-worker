@@ -19,7 +19,7 @@ Claude brain when a key is set and falls back to the free offline parser otherwi
 Voice INPUT (talking instead of typing) is the next step — see docs/voice-assistant.md.
 
 Run on the Pi with SYSTEM python3 (picamera2 + OpenCV are system packages):
-    python3 robot_code/papoi.py
+    python3 robot_code/tests/papoi.py
 
 One-time: sudo apt install -y python3-opencv opencv-data espeak-ng
 The camera is single-user — stop any other camera program first

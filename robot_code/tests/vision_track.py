@@ -17,7 +17,7 @@ stream service is running, stop it first:
 
 Then run:
 
-    python3 robot_code/vision_track.py
+    python3 robot_code/tests/vision_track.py
 
 Watch the annotated feed at  http://<pi-ip>:8000  (or the Tailscale IP from
 anywhere). Every face is boxed; the tracked target is highlighted and the motor

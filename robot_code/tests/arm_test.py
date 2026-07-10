@@ -20,10 +20,6 @@ Run:
     python3 robot_code/tests/arm_test.py
 """
 
-import os
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))  # find assistant.py in robot_code/
 from assistant import ARM_JOINTS, robot_move_arm, _ensure_arm  # reuse the real arm code
 
 

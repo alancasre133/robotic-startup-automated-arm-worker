@@ -21,11 +21,8 @@ Run (needs a real terminal — an interactive SSH session, not a scripted one):
 """
 
 import curses
-import os
-import sys
 from time import sleep
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))  # find assistant.py in robot_code/
 from assistant import _ensure_motors  # reuse the real motor objects
 
 PULSE_SECS = 0.4

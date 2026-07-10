@@ -143,5 +143,5 @@ echo "  - Verify the camera:  rpicam-hello --list-cameras   (should list imx219)
 echo "  - Test the motors:    python3 robot_code/tests/motor_test.py   (wheels off the ground)"
 echo "  - Verify the arm:     i2cdetect -y 1   (should show address 40)"
 echo "  - Test the arm:       python3 robot_code/tests/arm_test.py   (arm free to move)"
-echo "  - Run the assistant:  python3 robot_code/assistant.py    (voice mode)"
-echo "  - Keyboard mode:      python3 robot_code/assistant.py --type"
+echo "  - Run the assistant:  python3 robot_code/tests/assistant.py    (voice mode)"
+echo "  - Keyboard mode:      python3 robot_code/tests/assistant.py --type"

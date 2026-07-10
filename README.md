@@ -29,18 +29,17 @@ Each step links to the details further down (or to a file in the repo):
 6. **Boot config** — match [config/config.txt](config/config.txt); apply steps in **Camera (IMX219)**
 7. **Wire + test motors** — see **Motors (L9110S)**, then `python3 robot_code/tests/motor_test.py`
 8. **Test the camera** — see **Camera (IMX219)**, then `python3 robot_code/tests/camera_test.py`
-9. **Stream the camera live** — `python3 robot_code/camera_stream.py`, then open `http://<pi-ip>:8000`
+9. **Stream the camera live** — `python3 robot_code/tests/camera_stream.py`, then open `http://<pi-ip>:8000`
 10. **View from anywhere + auto-start on boot** — Tailscale + a systemd service: [docs/remote-access.md](docs/remote-access.md)
-11. **Talk to the robot** — `python3 robot_code/assistant.py` (works offline; add a key for the Claude brain) — see **Talk to the Robot**
+11. **Talk to the robot** — `python3 robot_code/tests/assistant.py` (works offline; add a key for the Claude brain) — see **Talk to the Robot**
 12. **Wire + test the arm** — see **HARDWARE.md → Robotic arm**, then `python3 robot_code/tests/arm_test.py` (arm free to move)
-13. **Wire + test obstacle sensing** — see **HARDWARE.md → Obstacle sensing**, then `python3 robot_code/obstacle_avoid.py`
-14. **Talk with your voice** — `python3 robot_code/assistant.py` (voice mode is the default; `--type` for keyboard)
+13. **Wire + test obstacle sensing** — see **HARDWARE.md → Obstacle sensing**, then `python3 robot_code/tests/obstacle_avoid.py`
+14. **Talk with your voice** — `python3 robot_code/tests/assistant.py` (voice mode is the default; `--type` for keyboard)
 
 ## Repository map
 
-`robot_code/` holds the real, ongoing programs; `robot_code/tests/` holds one-off
-bring-up/diagnostic scripts used to verify wiring before trusting it to the
-real programs.
+Everything currently lives under `robot_code/tests/` — old builds getting
+reworked for new plans.
 
 | Path | What it is |
 |------|-----------|
@@ -53,11 +52,11 @@ real programs.
 | `docs/pico-setup.md` | Pico W MicroPython flashing |
 | `docs/remote-access.md` | View the camera from anywhere (Tailscale) |
 | `docs/vision.md` | AI vision — faces / objects / hands + roadmap |
-| `robot_code/assistant.py` | Talk to the robot — voice/text, Claude brain + offline fallback, arm, music |
-| `robot_code/camera_stream.py` | Live camera stream to a browser |
-| `robot_code/vision_track.py` | Face detection + motor tracking + stream |
-| `robot_code/papoi.py` | Interactive face console — greets faces + takes live commands |
-| `robot_code/obstacle_avoid.py` | Stop/turn before hitting things (HC-SR04) |
+| `robot_code/tests/assistant.py` | Talk to the robot — voice/text, Claude brain + offline fallback, arm, music |
+| `robot_code/tests/camera_stream.py` | Live camera stream to a browser |
+| `robot_code/tests/vision_track.py` | Face detection + motor tracking + stream |
+| `robot_code/tests/papoi.py` | Interactive face console — greets faces + takes live commands |
+| `robot_code/tests/obstacle_avoid.py` | Stop/turn before hitting things (HC-SR04) |
 | `robot_code/tests/motor_test.py` | Drive both motors (bring-up test) |
 | `robot_code/tests/motor_diag.py` | Diagnose raw L9110S motor pin states |
 | `robot_code/tests/camera_test.py` | Capture a still photo |
@@ -383,7 +382,7 @@ Or capture from Python: [robot_code/tests/camera_test.py](robot_code/tests/camer
 Python, then open the URL on any device on the same WiFi:
 
 ```bash
-python3 robot_code/camera_stream.py     # then visit http://<pi-ip>:8000
+python3 robot_code/tests/camera_stream.py     # then visit http://<pi-ip>:8000
 ```
 
 To watch the camera from **anywhere on the internet** (not just your home WiFi),
@@ -406,7 +405,7 @@ turns the robot to follow you**, running entirely on the Pi (no new hardware).
 ```bash
 sudo apt install -y python3-opencv opencv-data
 sudo systemctl stop camera-stream          # free the camera + port 8000
-python3 robot_code/vision_track.py         # then watch http://<pi-ip>:8000
+python3 robot_code/tests/vision_track.py         # then watch http://<pi-ip>:8000
 ```
 
 Faces are boxed live in the stream; set `DRIVE_MOTORS = True` in the script
@@ -426,8 +425,8 @@ just replies** — out loud. Two brains, automatic fallback:
   installs. Used automatically if Claude isn't available.
 
 ```bash
-python3 robot_code/assistant.py           # VOICE mode — mic -> Vosk -> brain
-python3 robot_code/assistant.py --type    # TEXT  mode — keyboard -> brain
+python3 robot_code/tests/assistant.py           # VOICE mode — mic -> Vosk -> brain
+python3 robot_code/tests/assistant.py --type    # TEXT  mode — keyboard -> brain
 ```
 
 Example commands (spoken or typed):
@@ -452,10 +451,10 @@ export ANTHROPIC_API_KEY=sk-ant-...       # optional — keep it secret, never c
 
 **Arm + obstacle sensing** — bring-up/test scripts before trusting them to the
 assistant: [robot_code/tests/arm_test.py](robot_code/tests/arm_test.py) (steps through each
-servo) and [robot_code/obstacle_avoid.py](robot_code/obstacle_avoid.py) (stops +
+servo) and [robot_code/tests/obstacle_avoid.py](robot_code/tests/obstacle_avoid.py) (stops +
 turns before hitting something). See **HARDWARE.md** for wiring.
 
-**Interactive face console** — [robot_code/papoi.py](robot_code/papoi.py) does both
+**Interactive face console** — [robot_code/tests/papoi.py](robot_code/tests/papoi.py) does both
 at once: it watches the camera and greets faces (default: says "papoi", 5 s
 cooldown) **while** taking the same commands — including `when you see my face do
 X` to reprogram the greeting live.

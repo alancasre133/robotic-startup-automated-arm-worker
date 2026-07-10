@@ -16,8 +16,8 @@ Voice commands supported:
   stop                                           -> stops motors instantly
 
 Modes:
-  python3 robot_code/assistant.py           -> VOICE mode  (mic -> Vosk -> brain)
-  python3 robot_code/assistant.py --type    -> TEXT  mode  (keyboard -> brain)
+  python3 robot_code/tests/assistant.py           -> VOICE mode  (mic -> Vosk -> brain)
+  python3 robot_code/tests/assistant.py --type    -> TEXT  mode  (keyboard -> brain)
 
 Setup (on the Pi):
   # Install system deps

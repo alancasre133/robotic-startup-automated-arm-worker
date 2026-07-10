@@ -9,7 +9,7 @@ everything runs on the 4 CPU cores.
 
 | Task | Best tool | On this Pi? | Notes |
 |------|-----------|-------------|-------|
-| **Faces** | OpenCV Haar cascade | ✅ realtime-ish (~8–15 fps) | No new hardware. See `robot_code/vision_track.py` |
+| **Faces** | OpenCV Haar cascade | ✅ realtime-ish (~8–15 fps) | No new hardware. See `robot_code/tests/vision_track.py` |
 | **Objects** (person, cup, bottle… 80 COCO classes) | TensorFlow Lite (SSD-MobileNet, quantized) | ⚠️ ~1–3 fps | Usable for slow reactions, not smooth tracking |
 | **Hands** (21 finger landmarks / gestures) | Google MediaPipe | ❌ | No 32-bit-Pi pip wheels + too heavy for 512 MB |
 | **Scene understanding** ("find the red cup", "is the person waving?") | **Claude vision API** | ✅ (cloud) | ~1–2 s round-trip — great for *decisions*, too slow for *tracking* |
@@ -17,7 +17,7 @@ everything runs on the 4 CPU cores.
 **The takeaway:** think in two layers —
 - **Reflexes** (fast, on-Pi): face/motion tracking that keeps a target centered.
 - **Brain** (smart, cloud): Claude looks at a frame and decides *what to do*
-  (ties into [voice-assistant.md](voice-assistant.md) / `robot_code/assistant.py`).
+  (ties into [voice-assistant.md](voice-assistant.md) / `robot_code/tests/assistant.py`).
 
 ## Tier 1 — Face tracking (works now): `vision_track.py`
 
@@ -39,7 +39,7 @@ sudo apt install -y python3-opencv opencv-data
 # the camera is single-user: stop the auto-start stream first
 sudo systemctl stop camera-stream
 
-python3 robot_code/vision_track.py
+python3 robot_code/tests/vision_track.py
 # watch http://<pi-ip>:8000  (detection only until you arm the motors)
 ```
 
@@ -88,4 +88,4 @@ The end state combines both layers:
 - **On-Pi reflexes** keep a target centered and avoid obstacles (fast loop).
 - **Claude (brain)** periodically looks at a frame + hears a voice command and
   picks the goal ("go to the cup and pick it up"), issuing high-level actions
-  that the reflex layer carries out. See `robot_code/assistant.py`.
+  that the reflex layer carries out. See `robot_code/tests/assistant.py`.

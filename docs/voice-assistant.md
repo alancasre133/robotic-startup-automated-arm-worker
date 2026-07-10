@@ -1,7 +1,7 @@
 # Voice Assistant — Design
 
 Talk to the robot: it listens, thinks, answers out loud, and acts (drives, moves
-the arm, plays music). Working end to end — see [robot_code/assistant.py](../robot_code/assistant.py).
+the arm, plays music). Working end to end — see [robot_code/tests/assistant.py](../robot_code/tests/assistant.py).
 
 ## Pipeline
 
@@ -27,7 +27,7 @@ fallback brain, and TTS (espeak-ng) all run on-device with no internet needed.
 
 ## The brain — Claude API with tool use (+ offline fallback)
 
-[robot_code/assistant.py](../robot_code/assistant.py) uses the Anthropic Python
+[robot_code/tests/assistant.py](../robot_code/tests/assistant.py) uses the Anthropic Python
 SDK and the **tool-use loop**: Claude receives the request and can call tools
 that map to robot functions. If no key is set (or a call fails), it falls back
 to `local_brain()` — a standard-library keyword parser with the same tools.
@@ -66,19 +66,19 @@ pip install anthropic                    # gpiozero / lgpio come from the system
 export ANTHROPIC_API_KEY=sk-ant-...      # keep this secret; don't commit it
 ```
 
-Offline mode needs none of this — just run `python3 robot_code/assistant.py` with
+Offline mode needs none of this — just run `python3 robot_code/tests/assistant.py` with
 the system Python (no venv, no key).
 
 ## Offline fallback (free — no API, no internet)
 
-`robot_code/assistant.py` has a **second brain**: a standard-library keyword
+`robot_code/tests/assistant.py` has a **second brain**: a standard-library keyword
 parser (`local_brain`) that runs whenever the Claude SDK isn't installed, no
 `ANTHROPIC_API_KEY` is set, or a Claude call fails. It understands the basic
 commands — `forward`, `back`, `left`, `right`, `stop`, and arm moves — and drives
 the motors directly. So the robot always responds to simple commands (and `stop`
 acts **instantly**, before Claude is even consulted), and upgrades to full natural
 language when Claude is available. Offline mode needs no key, no WiFi, and no pip
-installs — just run `python3 robot_code/assistant.py` with the system Python.
+installs — just run `python3 robot_code/tests/assistant.py` with the system Python.
 
 ## Speech-to-text (STT) options
 

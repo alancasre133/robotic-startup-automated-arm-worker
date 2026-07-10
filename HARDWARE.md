@@ -56,7 +56,7 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > Pi → PCA9685 (I²C), physical pin numbers: `pin 1 (3.3V)→VCC`, `pin 20 (GND)→GND`,
 > `pin 3 (SDA)→SDA`, `pin 5 (SCL)→SCL`.
 > Servos plug onto channels 0–5, in order: **base, shoulder, elbow, wrist,
-> wrist_rotate, gripper** (`ARM_JOINTS` in `robot_code/assistant.py`) — this
+> wrist_rotate, gripper** (`ARM_JOINTS` in `robot_code/tests/assistant.py`) — this
 > order was confirmed empirically with `arm_jog_test.py` on the rebuilt arm
 > (don't assume it from the kit's mechanical layout; it depends purely on
 > which wire is plugged into which PCA9685 channel).
@@ -102,14 +102,14 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > the divider's 1 kΩ leg between Echo and pin 35, and its 2 kΩ leg from pin 35
 > down to `GND → pin 39`. Avoid the motor pins (16, 20, 27, 22 — BCM).
 >
-> **Confirmed working:** [`robot_code/obstacle_avoid.py`](robot_code/obstacle_avoid.py)
+> **Confirmed working:** [`robot_code/tests/obstacle_avoid.py`](robot_code/tests/obstacle_avoid.py)
 > reads distance with `gpiozero.DistanceSensor(echo=19, trigger=13)` and stops +
 > turns the robot when something is closer than 25 cm.
 
 ## Software / accounts
 
 - **Anthropic API key** *(optional)* — only for the smart Claude brain in
-  `robot_code/assistant.py`. The robot runs fully **offline and free** without it.
+  `robot_code/tests/assistant.py`. The robot runs fully **offline and free** without it.
   See [docs/voice-assistant.md](docs/voice-assistant.md).
 
 ---

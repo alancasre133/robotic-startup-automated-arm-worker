@@ -18,7 +18,7 @@ Install (on the Pi, already done by setup.sh):
     sudo apt install -y python3-gpiozero python3-lgpio
 
 Run:
-    python3 robot_code/obstacle_avoid.py
+    python3 robot_code/tests/obstacle_avoid.py
 
 Press Ctrl-C to stop.
 """

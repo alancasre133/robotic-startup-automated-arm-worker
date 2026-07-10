@@ -1,6 +1,6 @@
 # Remote Access — View the Camera from Anywhere
 
-By default the camera stream (`robot_code/camera_stream.py`) is only reachable on
+By default the camera stream (`robot_code/tests/camera_stream.py`) is only reachable on
 your home WiFi (`http://<pi-ip>:8000`). To watch it from anywhere on the
 internet, tunnel it out.
 
@@ -31,7 +31,7 @@ account**.
 ### 3. Watch from anywhere
 ```bash
 # on the Pi (start the stream):
-python3 robot_code/camera_stream.py
+python3 robot_code/tests/camera_stream.py
 ```
 Then on your phone/laptop — on **any** network (cellular, other WiFi) — open:
 ```
@@ -68,7 +68,7 @@ After=network.target
 
 [Service]
 # adjust the path to wherever your camera_stream.py lives
-ExecStart=/usr/bin/python3 /home/alanacr/robotic-startup-automated-arm-worker/robot_code/camera_stream.py
+ExecStart=/usr/bin/python3 /home/alanacr/robotic-startup-automated-arm-worker/robot_code/tests/camera_stream.py
 Restart=on-failure
 User=alanacr
 
