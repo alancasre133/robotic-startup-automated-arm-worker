@@ -10,6 +10,14 @@ vary — use them for budgeting, not exact quotes.
 
 If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wiring-overview.svg) directly.
 
+## Pi 3 GPIO pinout reference
+
+![Raspberry Pi 3 GPIO pinout](docs/pi3-pinout.png)
+
+Reference for the physical-pin numbers used throughout this doc (the "small
+number" column = physical pin position 1–40, matching what's used here — not
+the board's silkscreen GPIO# labels).
+
 ---
 
 ## Core build (the driving car)
