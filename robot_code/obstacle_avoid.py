@@ -4,15 +4,15 @@ Obstacle avoidance using the HC-SR04 ultrasonic sensor.
 Continuously measures distance in front of the robot. When an obstacle
 is closer than STOP_DISTANCE the robot stops and turns to avoid it.
 
-Wiring (BCM pin numbers):
-    HC-SR04 VCC   -> Pi pin 2  (5V)
-    HC-SR04 GND   -> Pi pin 6  (GND)
-    HC-SR04 Trig  -> GPIO 23   (pin 16)
-    HC-SR04 Echo  -> GPIO 24   (pin 18)  ** via voltage divider **
+Wiring (Pi physical pin numbers):
+    HC-SR04 VCC   -> Pi pin 2   (5V)
+    HC-SR04 GND   -> Pi pin 34  (GND)
+    HC-SR04 Trig  -> Pi pin 33  (GPIO13, BCM)
+    HC-SR04 Echo  -> Pi pin 35  (GPIO19, BCM)  ** via voltage divider **
 
 Voltage divider on Echo (Echo pin outputs 5V, Pi GPIO is 3.3V max):
-    Echo -> 1kΩ -> GPIO24
-    GPIO24 -> 2kΩ -> GND
+    Echo -> 1kΩ -> Pi pin 35 (GPIO19)
+    Pi pin 35 (GPIO19) -> 2kΩ -> Pi pin 39 (GND)
 
 Install (on the Pi, already done by setup.sh):
     sudo apt install -y python3-gpiozero python3-lgpio
@@ -27,8 +27,8 @@ from gpiozero import DistanceSensor, Motor
 from time import sleep
 
 # --- Config ------------------------------------------------------------------
-TRIG_PIN       = 23       # BCM
-ECHO_PIN       = 24       # BCM (behind voltage divider)
+TRIG_PIN       = 13       # BCM (Pi pin 33)
+ECHO_PIN       = 19       # BCM (Pi pin 35, behind voltage divider)
 STOP_DISTANCE  = 0.25     # metres — stop if obstacle is closer than this
 TURN_TIME      = 0.8      # seconds to turn when blocked
 POLL_INTERVAL  = 0.05     # seconds between distance readings

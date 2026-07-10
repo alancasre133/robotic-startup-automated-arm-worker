@@ -42,10 +42,10 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 
 | # | Component | Qty | What it's for | Approx. (MXN) |
 |---|-----------|-----|---------------|---------------|
-| 9 | 6-DOF robotic arm kit (6× MG996R servos) | 1 | The arm itself | ~775 |
-| 10 | PCA9685 16-channel servo driver | 1 | Drives the servos over I²C (the Pi has only 2 hardware PWM pins) | 60–100 |
-| 11 | 6V 2200 mAh NiMH battery pack | 1 (or 2-pack) | Servo power (5–6V). MG996R are current-hungry — never run off the Pi | ~560 (2-pack) |
-| 12 | SM-2P connector pair (pigtail) | 1 | Adapts the battery's SM plug to the PCA9685 screw terminal without cutting it | ~100 |
+| 9 | 6-DOF robotic arm kit (6× MG996R servos) — bought: [MLM2080598029](https://www.mercadolibre.com.mx/brazo-robotico-de-6-grados-dof-de-libertad-servomotor/p/MLM2080598029) | 1 | The arm itself | ~775 |
+| 10 | PCA9685 16-channel servo driver — bought: [MLM2040047104](https://www.mercadolibre.com.mx/pca9685-modulo-pwm-16-canales-12-bits-i2c/p/MLM2040047104) | 1 | Drives the servos over I²C (the Pi has only 2 hardware PWM pins) | 60–100 |
+| 11 | 6V 2200 mAh NiMH battery pack — bought: **Blomiky 2-pack, SM-2P plug + USB charging cable** | 1 (or 2-pack) | Servo power (5–6V). MG996R are current-hungry — never run off the Pi | ~560 (2-pack) |
+| 12 | SM-2P connector pair (pigtail) — bought: **yueton 10-pair SM-2P male/female** | 1 | Adapts the battery's SM plug to the PCA9685 screw terminal without cutting it | ~100 |
 | — | Raspberry Pi Pico W *(alternative)* | 1 | Can generate the servo PWM instead of the PCA9685 — see [docs/pico-setup.md](docs/pico-setup.md) | 120–180 |
 
 > **Servo power:** a 6V NiMH pack connects **straight to the PCA9685 V+** (no
@@ -55,7 +55,8 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > light moves; for strong, sustained 6-servo motion, step up to a **2S LiPo + a
 > 5–6V UBEC (5A+)**.
 >
-> Pi → PCA9685 (I²C): `3.3V→VCC`, `GND→GND`, `SDA (pin 3)→SDA`, `SCL (pin 5)→SCL`.
+> Pi → PCA9685 (I²C), physical pin numbers: `pin 1 (3.3V)→VCC`, `pin 20 (GND)→GND`,
+> `pin 3 (SDA)→SDA`, `pin 5 (SCL)→SCL`.
 > Servos plug onto channels 0–5, in order: **base, shoulder, elbow, wrist,
 > gripper, wrist_rotate** (`ARM_JOINTS` in `robot_code/assistant.py`) — the
 > first 5 channels were wired and tested before `wrist_rotate` was added, so
@@ -96,11 +97,14 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > ⚠️ **Protect the Pi:** the HC-SR04's **Echo** pin outputs **5 V**, but Pi GPIO
 > tolerates only **3.3 V**. Put a voltage divider on Echo (`Echo →1 kΩ→ GPIO`, then
 > `GPIO →2 kΩ→ GND`) — or use an **HC-SR04*P*** / 3.3 V board and skip it.
-> Wiring: `VCC→5 V`, `GND→GND`, `Trig→` **GPIO23**, `Echo→` **GPIO24** via the
-> divider. Avoid the motor pins (16, 20, 27, 22).
+>
+> **Confirmed wiring** (physical Pi pin numbers): `VCC → pin 2` (5V), `GND →
+> pin 34`, `Trig → pin 33` (GPIO13 BCM), `Echo → pin 35` (GPIO19 BCM) — with
+> the divider's 1 kΩ leg between Echo and pin 35, and its 2 kΩ leg from pin 35
+> down to `GND → pin 39`. Avoid the motor pins (16, 20, 27, 22 — BCM).
 >
 > **Confirmed working:** [`robot_code/obstacle_avoid.py`](robot_code/obstacle_avoid.py)
-> reads distance with `gpiozero.DistanceSensor(echo=24, trigger=23)` and stops +
+> reads distance with `gpiozero.DistanceSensor(echo=19, trigger=13)` and stops +
 > turns the robot when something is closer than 25 cm.
 
 ## Software / accounts
