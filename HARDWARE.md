@@ -86,6 +86,17 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > for both mic and speaker; record + playback tested. Setup / test commands are in
 > [docs/voice-assistant.md](docs/voice-assistant.md).
 
+> **USB wiring:** the Pi 3A+ has only **one USB port**, so everything else is
+> USB, not GPIO:
+> - Power bank **USB-A out** → Pi's **micro-USB power in** (a separate port from
+>   the data USB port — this only powers the Pi, no data).
+> - Pi's **USB-A port** → **USB hub** (data).
+> - USB hub → **speakerphone** + **Pico** (both plugged into the hub, not
+>   directly into the Pi).
+>
+> No soldering, no GPIO pins used by any of these four. See
+> [docs/pico-setup.md](docs/pico-setup.md) for getting the Pico talking to the Pi.
+
 ## Obstacle sensing (ultrasonic) — working ✅
 
 | # | Component | Qty | What it's for | Approx. (MXN) |
@@ -135,6 +146,14 @@ Pi GPIO → L9110S (BCM numbers):
 
 Power: battery **+** → L9110S **VCC**, battery **−** → Pi **pin 9** (GND).
 The Pi is powered separately by the USB power bank.
+
+USB topology (Pi 3A+ has one USB-A data port + one micro-USB power port):
+
+```
+power bank --(USB-A -> micro-USB)--> Pi power in
+Pi USB-A port --(data)--> USB hub --> speakerphone
+                                   --> Pico
+```
 
 See [`robot_code/tests/motor_test.py`](robot_code/tests/motor_test.py) for the matching code,
 and run [`setup.sh`](setup.sh) once to install dependencies.
