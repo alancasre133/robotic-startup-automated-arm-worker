@@ -62,7 +62,7 @@ reworked for new plans.
 | `robot_code/tests/camera_test.py` | Capture a still photo |
 | `robot_code/tests/arm_test.py` | Step-by-step PCA9685 + servo bring-up test |
 | `robot_code/tests/arm_jog_test.py` | Jog each servo live with arrow keys (Enter/`b` to switch joints) |
-| `robot_code/tests/arm_sequence.py` | Record a sequence of arm poses (jog + capture), save it, replay it later |
+| `robot_code/tests/arm_sequence.py` | Record a sequence of arm poses + wheel moves (TAB to switch), save it, replay it later |
 | `robot_code/tests/hello.py` | Trivial "Python works" smoke test |
 
 ---

@@ -1,26 +1,37 @@
 """
-Record a sequence of arm poses, save it, and replay it later.
+Record a sequence of arm poses AND wheel moves, save it, and replay it later.
 
-Record mode is arm_jog_test.py's jog UI (arrow keys move the current joint)
-plus a capture key: whenever the arm is posed how you want, press SPACE to
-save that full pose as one step in the sequence. Keep jogging + capturing to
-build up a multi-step motion, then save it to a JSON file under
-arm_sequences/. Play mode just replays the saved poses in order.
+Two recording modes, switch between them anytime with TAB, both writing into
+the SAME sequence -- so one recording can mix arm poses and drive moves:
 
-Controls (record mode):
-    LEFT / RIGHT   nudge the current joint's angle by 5 degrees
-    Enter          go to the next joint
-    b              go back to the previous joint
-    SPACE          capture the current full pose as the next step
+  ARM mode (arm_jog_test.py's jog UI): jog a joint with LEFT/RIGHT, switch
+  joints with Enter/b, then SPACE to capture the current full pose as a step.
+
+  WHEEL mode (wheel_jog_test.py's drive UI): each arrow key IS a step --
+  press it and the robot drives immediately, then that move is captured.
+
+Controls:
+    TAB            switch between ARM mode and WHEEL mode
     u              undo (remove) the last captured step
     s              save the sequence and quit
     q              quit WITHOUT saving
 
+  ARM mode:
+    LEFT / RIGHT   nudge the current joint's angle by 5 degrees
+    Enter          go to the next joint
+    b              go back to the previous joint
+    SPACE          capture the current full pose as the next step
+
+  WHEEL mode:
+    UP / DOWN      drive forward / backward for 1s (captured automatically)
+    LEFT / RIGHT   turn left / right for 1s (captured automatically)
+    SPACE          spin in place for 1s (captured automatically)
+    x              explicit stop step
+
 SAFETY:
-  - Keep the arm free to move — nothing should block a joint's travel.
-  - Power the servo battery (6V NiMH -> PCA9685 V+) BEFORE running this. The
-    Pi's 3.3V VCC alone runs the PCA9685 chip but not the servos.
-  - If a joint strains or grinds, quit immediately (q, or Ctrl-C).
+  - Arm: keep it free to move, power the servo battery BEFORE running this.
+  - Wheels: keep them off the ground, or clear floor space to actually drive.
+  - If anything strains, grinds, or runs away, quit immediately (q, or Ctrl-C).
 
 Run:
     python3 robot_code/tests/arm_sequence.py record <name>   # interactive
@@ -34,11 +45,12 @@ import os
 import sys
 from time import sleep
 
-from assistant import ARM_JOINTS, robot_move_arm, _ensure_arm  # reuse the real arm code
+from assistant import ARM_JOINTS, robot_move_arm, robot_drive, _ensure_arm, _ensure_motors
 
 STEP = 5.0
 START_ANGLE = 90.0
-STEP_PAUSE = 0.8  # seconds to wait between poses during playback, for the servos to get there
+DRIVE_SECS = 1.0
+STEP_PAUSE = 0.8  # seconds to wait between arm poses during playback, for the servos to get there
 
 SEQUENCES_DIR = os.path.join(os.path.dirname(__file__), "arm_sequences")
 
@@ -47,56 +59,54 @@ def _sequence_path(name: str) -> str:
     return os.path.join(SEQUENCES_DIR, f"{name}.json")
 
 
+def _draw_header(stdscr, name, mode, steps):
+    stdscr.addstr(0, 0, f"Recording sequence '{name}'  [{mode.upper()} mode]  ({len(steps)} step(s) captured)")
+    stdscr.addstr(1, 0, "TAB switch mode  |  u undo  |  s save+quit  |  q quit without saving")
+
+
 def _record(stdscr, name: str):
     curses.curs_set(0)
     stdscr.keypad(True)
     stdscr.nodelay(False)
 
     if _ensure_arm() is None:
-        stdscr.addstr(0, 0, "Could not reach the PCA9685 over I2C. Check:")
-        stdscr.addstr(1, 0, "  - I2C enabled?  i2cdetect -y 1  should show address 40")
-        stdscr.addstr(2, 0, "  - Pi -> PCA9685: 3.3V->VCC, GND->GND, SDA(pin3)->SDA, SCL(pin5)->SCL")
-        stdscr.addstr(3, 0, "  - adafruit-circuitpython-pca9685 / adafruit-blinka installed?")
-        stdscr.addstr(5, 0, "Press any key to exit.")
+        stdscr.addstr(0, 0, "Could not reach the PCA9685 over I2C -- arm won't move, but wheel")
+        stdscr.addstr(1, 0, "recording still works. Press any key to continue.")
         stdscr.refresh()
         stdscr.getch()
-        return
 
     angles = {j: START_ANGLE for j in ARM_JOINTS}
     for j in ARM_JOINTS:
         robot_move_arm(j, angles[j])
+    _ensure_motors()
 
     steps: list = []
     idx = 0
+    mode = "arm"
     saved = False
     while True:
-        joint = ARM_JOINTS[idx % len(ARM_JOINTS)]
         stdscr.clear()
-        stdscr.addstr(0, 0, f"Recording sequence '{name}'  ({len(steps)} step(s) captured)")
-        stdscr.addstr(2, 0, f"Joint {idx % len(ARM_JOINTS) + 1}/{len(ARM_JOINTS)}: {joint}")
-        stdscr.addstr(3, 0, f"Angle: {angles[joint]:.0f} deg")
-        stdscr.addstr(5, 0, "<-  / ->  nudge angle (-5 / +5 deg)")
-        stdscr.addstr(6, 0, "Enter     next joint")
-        stdscr.addstr(7, 0, "b         previous joint")
-        stdscr.addstr(8, 0, "SPACE     capture this pose as the next step")
-        stdscr.addstr(9, 0, "u         undo last captured step")
-        stdscr.addstr(10, 0, "s         save sequence and quit")
-        stdscr.addstr(11, 0, "q         quit WITHOUT saving")
+        _draw_header(stdscr, name, mode, steps)
+
+        if mode == "arm":
+            joint = ARM_JOINTS[idx % len(ARM_JOINTS)]
+            stdscr.addstr(3, 0, f"Joint {idx % len(ARM_JOINTS) + 1}/{len(ARM_JOINTS)}: {joint}")
+            stdscr.addstr(4, 0, f"Angle: {angles[joint]:.0f} deg")
+            stdscr.addstr(6, 0, "<-  / ->  nudge angle (-5 / +5 deg)")
+            stdscr.addstr(7, 0, "Enter     next joint")
+            stdscr.addstr(8, 0, "b         previous joint")
+            stdscr.addstr(9, 0, "SPACE     capture this pose as the next step")
+        else:
+            stdscr.addstr(3, 0, "UP / DOWN     drive forward / backward 1s")
+            stdscr.addstr(4, 0, "LEFT / RIGHT  turn left / right 1s")
+            stdscr.addstr(5, 0, "SPACE         spin in place 1s")
+            stdscr.addstr(6, 0, "x             explicit stop step")
+            stdscr.addstr(8, 0, "(each move drives immediately and is captured automatically)")
         stdscr.refresh()
 
         key = stdscr.getch()
-        if key == curses.KEY_LEFT:
-            angles[joint] = max(0.0, angles[joint] - STEP)
-            robot_move_arm(joint, angles[joint])
-        elif key == curses.KEY_RIGHT:
-            angles[joint] = min(180.0, angles[joint] + STEP)
-            robot_move_arm(joint, angles[joint])
-        elif key in (curses.KEY_ENTER, ord("\n"), ord("\r")):
-            idx += 1
-        elif key in (ord("b"), ord("B")):
-            idx -= 1
-        elif key == ord(" "):
-            steps.append(dict(angles))
+        if key == ord("\t"):
+            mode = "wheel" if mode == "arm" else "arm"
         elif key in (ord("u"), ord("U")):
             if steps:
                 steps.pop()
@@ -105,6 +115,38 @@ def _record(stdscr, name: str):
             break
         elif key in (ord("q"), ord("Q")):
             break
+        elif mode == "arm":
+            joint = ARM_JOINTS[idx % len(ARM_JOINTS)]
+            if key == curses.KEY_LEFT:
+                angles[joint] = max(0.0, angles[joint] - STEP)
+                robot_move_arm(joint, angles[joint])
+            elif key == curses.KEY_RIGHT:
+                angles[joint] = min(180.0, angles[joint] + STEP)
+                robot_move_arm(joint, angles[joint])
+            elif key in (curses.KEY_ENTER, ord("\n"), ord("\r")):
+                idx += 1
+            elif key in (ord("b"), ord("B")):
+                idx -= 1
+            elif key == ord(" "):
+                steps.append({"type": "arm", "pose": dict(angles)})
+        else:  # wheel mode
+            direction = None
+            if key == curses.KEY_UP:
+                direction = "forward"
+            elif key == curses.KEY_DOWN:
+                direction = "backward"
+            elif key == curses.KEY_LEFT:
+                direction = "left"
+            elif key == curses.KEY_RIGHT:
+                direction = "right"
+            elif key == ord(" "):
+                direction = "spin"
+            elif key in (ord("x"), ord("X")):
+                direction = "stop"
+            if direction:
+                secs = 0.0 if direction == "stop" else DRIVE_SECS
+                robot_drive(direction, secs)
+                steps.append({"type": "drive", "direction": direction, "seconds": secs})
 
     if saved:
         if not steps:
@@ -139,15 +181,19 @@ def play(name: str):
         return
     with open(path) as f:
         steps = json.load(f)
-    if _ensure_arm() is None:
-        print("Could not reach the PCA9685 over I2C -- check wiring / I2C enabled.")
-        return
     print(f"Playing '{name}' ({len(steps)} step(s))...")
-    for i, pose in enumerate(steps):
-        print(f"  step {i + 1}/{len(steps)}: {pose}")
-        for joint, angle in pose.items():
-            robot_move_arm(joint, angle)
-        sleep(STEP_PAUSE)
+    for i, step in enumerate(steps):
+        if step["type"] == "arm":
+            print(f"  step {i + 1}/{len(steps)}: arm pose {step['pose']}")
+            if _ensure_arm() is None:
+                print("    !! arm not connected, skipping")
+                continue
+            for joint, angle in step["pose"].items():
+                robot_move_arm(joint, angle)
+            sleep(STEP_PAUSE)
+        else:
+            print(f"  step {i + 1}/{len(steps)}: drive {step['direction']} for {step['seconds']}s")
+            robot_drive(step["direction"], step["seconds"])
     print("Done.")
 
 
@@ -163,7 +209,9 @@ def list_sequences():
     for n in names:
         with open(_sequence_path(n)) as f:
             steps = json.load(f)
-        print(f"  {n}  ({len(steps)} step(s))")
+        arm_n = sum(1 for s in steps if s["type"] == "arm")
+        drive_n = sum(1 for s in steps if s["type"] == "drive")
+        print(f"  {n}  ({len(steps)} step(s): {arm_n} arm, {drive_n} drive)")
 
 
 if __name__ == "__main__":
