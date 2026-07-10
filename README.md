@@ -11,7 +11,7 @@ A Raspberry Pi 3 based robotic arm project.
 - ✅ **Voice I/O** — USB speakerphone (mic + speaker) records + plays back
 - ✅ **Talk to it** — voice **or** typed commands → the robot acts + speaks, via a **Claude brain or a free offline fallback**
 - ✅ **Voice input** — offline speech-to-text (Vosk); talk to it, no typing needed
-- ✅ **Arm** — 6-DOF servo arm via a PCA9685 (base / shoulder / elbow / wrist / gripper / wrist_rotate) — all 6 joints tested
+- ✅ **Arm** — 6-DOF servo arm via a PCA9685 (base / shoulder / elbow / wrist / wrist_rotate / gripper) — all 6 joints tested
 - ✅ **Obstacle sensing** — HC-SR04 ultrasonic (distance + stop-before-hitting)
 - ✅ **Music** — download + play songs by voice (yt-dlp + mpg123)
 - ✅ **Interactive face console** — `papoi.py` greets faces **and** takes live commands

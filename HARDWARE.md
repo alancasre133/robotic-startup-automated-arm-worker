@@ -58,11 +58,12 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 > Pi → PCA9685 (I²C), physical pin numbers: `pin 1 (3.3V)→VCC`, `pin 20 (GND)→GND`,
 > `pin 3 (SDA)→SDA`, `pin 5 (SCL)→SCL`.
 > Servos plug onto channels 0–5, in order: **base, shoulder, elbow, wrist,
-> gripper, wrist_rotate** (`ARM_JOINTS` in `robot_code/assistant.py`) — the
-> first 5 channels were wired and tested before `wrist_rotate` was added, so
-> it's channel 5, not inserted before gripper.
+> wrist_rotate, gripper** (`ARM_JOINTS` in `robot_code/assistant.py`) — this
+> order was confirmed empirically with `arm_jog_test.py` on the rebuilt arm
+> (don't assume it from the kit's mechanical layout; it depends purely on
+> which wire is plugged into which PCA9685 channel).
 >
-> **Confirmed working:** all 6 joints — including `wrist_rotate` (channel 5) —
+> **Confirmed working:** all 6 joints — including `wrist_rotate` (channel 4) —
 > move correctly via [`robot_code/tests/arm_test.py`](robot_code/tests/arm_test.py)
 > and [`robot_code/tests/arm_jog_test.py`](robot_code/tests/arm_jog_test.py).
 > (One early gripper wiring issue turned out to be a loose connector, not a
