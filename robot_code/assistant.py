@@ -63,7 +63,13 @@ try:
     import sounddevice as sd
     from vosk import Model, KaldiRecognizer
     _VOSK_AVAILABLE = True
-except ImportError:
+except (ImportError, OSError):
+    # OSError (not just ImportError) because a broken/incompatible native
+    # library -- e.g. vosk's bundled libvosk.so refusing to load with
+    # "cannot enable executable stack" -- must not crash this whole module.
+    # Anything that only needs ARM_JOINTS/robot_move_arm/robot_drive (arm_test.py,
+    # arm_jog_test.py, motor scripts) imports assistant.py and would otherwise
+    # die here even though it never touches voice input at all.
     _VOSK_AVAILABLE = False
 
 # ---------------------------------------------------------------------------
