@@ -28,6 +28,10 @@ Setup (on the Pi):
 
   # Vosk for offline speech recognition
   pip install vosk
+  # If it fails with "cannot enable executable stack" (seen on trixie/armhf),
+  # patch its bundled native library:
+  sudo apt install -y execstack
+  execstack -c "$(python3 -c 'import vosk,os;print(os.path.join(os.path.dirname(vosk.__file__),"libvosk.so"))')"
   # Download a small English model (~40 MB):
   wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
   unzip vosk-model-small-en-us-0.15.zip -d ~/

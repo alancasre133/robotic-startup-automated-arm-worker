@@ -55,6 +55,23 @@ echo "==> Installing Vosk (offline speech recognition)..."
 python3 -m pip install --break-system-packages vosk 2>/dev/null || python3 -m pip install vosk
 
 echo
+echo "==> Patching vosk's native library (executable-stack workaround)..."
+# vosk's bundled libvosk.so can fail to load with:
+#   OSError: cannot enable executable stack as shared object requires
+# on Debian trixie/armhf -- modern glibc refuses to load a shared object that
+# requests an executable stack. Clear that ELF flag so it loads cleanly.
+sudo apt install -y execstack
+VOSK_SO=$(python3 -c "import vosk, os; print(os.path.join(os.path.dirname(vosk.__file__), 'libvosk.so'))" 2>/dev/null)
+if [ -n "$VOSK_SO" ] && [ -f "$VOSK_SO" ]; then
+    execstack -c "$VOSK_SO"
+    echo "    Patched $VOSK_SO"
+else
+    echo "    Could not locate libvosk.so -- if voice mode later fails with"
+    echo "    'cannot enable executable stack', find it and run:"
+    echo "    execstack -c /path/to/vosk/libvosk.so"
+fi
+
+echo
 echo "==> Vosk model setup..."
 VOSK_MODEL=~/vosk-model
 if [ ! -d "$VOSK_MODEL" ]; then
