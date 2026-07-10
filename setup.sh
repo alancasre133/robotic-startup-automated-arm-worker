@@ -72,6 +72,24 @@ echo "==> Installing audio tools (espeak-ng, aplay, mpg123)..."
 apt_install espeak-ng alsa-utils mpg123
 
 echo
+echo "==> Setting USB speakerphone volume..."
+# The Techwolf/BY Y02 speakerphone's PCM Playback Volume defaults to 0 (muted)
+# on a fresh setup -- this looked exactly like a broken/silent mic during
+# debugging, but arecord was capturing fine the whole time; only the SPEAKER
+# was silent. Un-mute + boost both playback and mic capture, then save with
+# alsactl store so it survives a reboot (ALSA mixer state resets otherwise).
+SPK_CARD=$(arecord -l 2>/dev/null | grep -i "usb audio" | head -1 | sed -n 's/^card \([0-9]*\).*/\1/p')
+if [ -n "$SPK_CARD" ]; then
+    amixer -c "$SPK_CARD" sset 'PCM' 90% unmute >/dev/null 2>&1
+    amixer -c "$SPK_CARD" sset 'Mic' 95% unmute >/dev/null 2>&1
+    sudo alsactl store
+    echo "    Set playback/mic volume on card $SPK_CARD and saved with alsactl store."
+else
+    echo "    No USB Audio capture card found yet (mic not plugged in?) -- if voice"
+    echo "    mode is silent later, run: amixer -c <card> sset 'PCM' 90% unmute"
+fi
+
+echo
 echo "==> Installing yt-dlp (song downloader)..."
 python3 -m pip install --break-system-packages yt-dlp 2>/dev/null || python3 -m pip install yt-dlp
 
