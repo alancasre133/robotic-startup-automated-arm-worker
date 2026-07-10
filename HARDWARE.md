@@ -147,6 +147,28 @@ Pi GPIO → L9110S (BCM numbers):
 Power: battery **+** → L9110S **VCC**, battery **−** → Pi **pin 9** (GND).
 The Pi is powered separately by the USB power bank.
 
+Pi → PCA9685 (physical pin numbers, I²C):
+
+| PCA9685 pin | Pi pin | Function |
+|-------------|--------|----------|
+| VCC | 1 | 3.3V logic power |
+| GND | 20 | Ground |
+| SDA | 3  | I²C data |
+| SCL | 5  | I²C clock |
+| V+  | — | 6V servo power, from the NiMH pack — **not** the Pi |
+
+Servo channels 0–5 (`ARM_JOINTS` order): `base, shoulder, elbow, wrist,
+wrist_rotate, gripper`.
+
+Pi → HC-SR04 (physical pin numbers):
+
+| HC-SR04 pin | Pi pin | Notes |
+|-------------|--------|-------|
+| VCC  | 2  | 5V |
+| GND  | 34 | |
+| Trig | 33 | GPIO13 (BCM) |
+| Echo | 35 | GPIO19 (BCM) — **through the 1kΩ/2kΩ voltage divider**, not direct |
+
 USB topology (Pi 3A+ has one USB-A data port + one micro-USB power port):
 
 ```
