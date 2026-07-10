@@ -66,12 +66,10 @@ echo "    Done (a reboot is required for the camera to appear)."
 echo
 echo
 echo "==> Installing audio tools (espeak-ng, aplay, mpg123)..."
+# arecord (from alsa-utils) is what assistant.py uses for mic input -- not
+# Python's sounddevice/PortAudio, which couldn't negotiate the USB
+# speakerphone's sample rate on the raw ALSA default device.
 apt_install espeak-ng alsa-utils mpg123
-
-echo
-echo "==> Installing Python audio input (sounddevice)..."
-# No python3-sounddevice package on Trixie's repos — install via pip instead.
-python3 -m pip install --break-system-packages sounddevice 2>/dev/null || python3 -m pip install sounddevice
 
 echo
 echo "==> Installing yt-dlp (song downloader)..."

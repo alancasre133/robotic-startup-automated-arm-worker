@@ -442,8 +442,8 @@ stop                                              -> stops motors instantly
 
 Replies are spoken through the USB speaker (Piper if installed, else espeak-ng).
 
-**Setup** — voice mode needs Vosk + a small offline model + `sounddevice`; the
-Claude brain needs a key. `bash setup.sh` installs all of it (or run offline/text
+**Setup** — voice mode needs Vosk + a small offline model + `arecord` (alsa-utils);
+the Claude brain needs a key. `bash setup.sh` installs all of it (or run offline/text
 mode with nothing extra — it already works with the base install):
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...       # optional — keep it secret, never commit it

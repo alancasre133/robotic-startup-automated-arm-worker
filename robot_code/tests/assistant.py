@@ -20,8 +20,10 @@ Modes:
   python3 robot_code/tests/assistant.py --type    -> TEXT  mode  (keyboard -> brain)
 
 Setup (on the Pi):
-  # Install system deps
-  sudo apt install -y espeak-ng alsa-utils mpg123 python3-sounddevice
+  # Install system deps (arecord, from alsa-utils, is what does mic capture --
+  # not Python's sounddevice/PortAudio, which can't negotiate the USB
+  # speakerphone's sample rate on the raw ALSA default device)
+  sudo apt install -y espeak-ng alsa-utils mpg123
 
   # Install yt-dlp for song downloads
   pip install yt-dlp
@@ -29,9 +31,10 @@ Setup (on the Pi):
   # Vosk for offline speech recognition
   pip install vosk
   # If it fails with "cannot enable executable stack" (seen on trixie/armhf),
-  # patch its bundled native library:
-  sudo apt install -y execstack
-  execstack -c "$(python3 -c 'import vosk,os;print(os.path.join(os.path.dirname(vosk.__file__),"libvosk.so"))')"
+  # patch its bundled native library. execstack itself isn't packaged for
+  # Trixie -- use patchelf instead:
+  sudo apt install -y patchelf
+  patchelf --clear-execstack "$(python3 -c 'import vosk,os;print(os.path.join(os.path.dirname(vosk.__file__),"libvosk.so"))')"
   # Download a small English model (~40 MB):
   wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
   unzip vosk-model-small-en-us-0.15.zip -d ~/
@@ -40,13 +43,12 @@ Setup (on the Pi):
   # Optional: Claude brain
   python3 -m venv --system-site-packages ~/venv
   source ~/venv/bin/activate
-  pip install anthropic vosk yt-dlp sounddevice
+  pip install anthropic vosk yt-dlp
   export ANTHROPIC_API_KEY=sk-ant-...
 """
 
 import json
 import os
-import queue
 import re
 import shutil
 import subprocess
@@ -64,7 +66,6 @@ except ImportError:
     anthropic = None
 
 try:
-    import sounddevice as sd
     from vosk import Model, KaldiRecognizer
     _VOSK_AVAILABLE = True
 except (ImportError, OSError):
@@ -81,7 +82,7 @@ except (ImportError, OSError):
 # ---------------------------------------------------------------------------
 MODEL          = "claude-haiku-4-5"
 AUDIO_DEVICE   = "plughw:1,0"          # USB speakerphone (card 1)
-MIC_DEVICE     = None                  # None = system default mic
+MIC_DEVICE     = "plughw:1,0"          # same device, via arecord (see transcribe())
 SAMPLE_RATE    = 16000
 VOSK_MODEL_DIR = os.path.expanduser("~/vosk-model")
 MUSIC_DIR      = os.path.expanduser("~/music")
@@ -645,7 +646,7 @@ def transcribe() -> str:
     global _vosk_model
     if not _VOSK_AVAILABLE:
         raise RuntimeError(
-            "Vosk not installed. Run: pip install vosk sounddevice\n"
+            "Vosk not installed. Run: pip install vosk\n"
             "Then download a model: https://alphacephei.com/vosk/models\n"
             "Extract to ~/vosk-model"
         )
@@ -659,23 +660,30 @@ def transcribe() -> str:
         print("[loading speech model...]")
         _vosk_model = Model(VOSK_MODEL_DIR)
     rec = KaldiRecognizer(_vosk_model, SAMPLE_RATE)
-    q: queue.Queue = queue.Queue()
-
-    def _cb(indata, frames, time_info, status):
-        q.put(bytes(indata))
 
     print("[listening...]")
-    with sd.RawInputStream(samplerate=SAMPLE_RATE, blocksize=8000,
-                           device=MIC_DEVICE, dtype="int16",
-                           channels=1, callback=_cb):
+    # arecord, not Python's sounddevice/PortAudio: PortAudio's raw ALSA
+    # "default"/"sysdefault" device rejected 16kHz outright ("Invalid sample
+    # rate"). plughw auto-converts, and `arecord -D plughw:1,0 -r 16000` is
+    # the exact command already confirmed working (see voice-assistant.md).
+    proc = subprocess.Popen(
+        ["arecord", "-D", MIC_DEVICE, "-f", "S16_LE", "-c", "1", "-r", str(SAMPLE_RATE), "-t", "raw"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    try:
         while True:
-            data = q.get()
+            data = proc.stdout.read(4000)  # ~0.25s of audio at 16kHz mono S16LE
+            if not data:
+                break
             if rec.AcceptWaveform(data):
                 result = json.loads(rec.Result())
                 text = result.get("text", "").strip()
                 if text:
                     print(f"[heard] {text}")
                     return text
+    finally:
+        proc.terminate()
+        proc.wait()
 
 
 # ---------------------------------------------------------------------------
