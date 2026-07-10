@@ -31,12 +31,10 @@ If the diagram doesn't render inline, open [docs/wiring-overview.svg](docs/wirin
 
 | # | Component | Qty | What it's for | Approx. (MXN) |
 |---|-----------|-----|---------------|---------------|
-| 8 | Camera Module v2 / **IMX219** module + ribbon — bought: [Arducam 8MP IMX219 (B09V576TFN)](https://www.amazon.com.mx/dp/B09V576TFN), 20"/500mm flex cable | 1 | Live video / vision on the Pi | 260–555 |
+| 8 | Arducam 8MP IMX219 camera module — bought: [B09V576TFN](https://www.amazon.com.mx/dp/B09V576TFN), 20"/500mm flex cable | 1 | Live video / vision on the Pi | 260–555 |
 
-> ⚠️ Avoid generic **OV5647 "v1.3" clones** — ours was detected over I²C but never
-> streamed (CSI-2 timeout) and could not be fixed in software. The **IMX219**
-> sensor works out of the box on Trixie. Match the ribbon cable to the Pi 3
-> (15-pin, standard CSI).
+> Confirmed working on Trixie. Match the ribbon cable to the Pi 3 (15-pin,
+> standard CSI).
 
 ## Robotic arm — working ✅
 

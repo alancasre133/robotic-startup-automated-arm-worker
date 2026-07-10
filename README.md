@@ -393,8 +393,6 @@ see [docs/remote-access.md](docs/remote-access.md).
 - **"No cameras available"** is almost always the **ribbon orientation** — flip
   the cable at the Pi end. Also confirm it's in the **CAMERA (CSI)** connector,
   not the look-alike **DISPLAY (DSI)** one.
-- **Avoid OV5647 "v1.3" clones** — ours was detected on I²C but never streamed
-  (CSI-2 timeout) and couldn't be fixed in software. The IMX219 just works.
 - CMA is set to `cma-64`, fine up to 1920×1080. For full 8 MP (3280×2464),
   raise it to `cma-128` in the `dtoverlay=vc4-kms-v3d,cma-…` line.
 
