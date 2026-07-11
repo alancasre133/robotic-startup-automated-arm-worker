@@ -47,6 +47,7 @@ Setup (on the Pi):
   export ANTHROPIC_API_KEY=sk-ant-...
 """
 
+import difflib
 import json
 import os
 import re
@@ -376,11 +377,29 @@ def _pick_from_voice(options: list[str], voice_mode: bool) -> int:
 _voice_mode = False
 
 
+def _local_matches(query: str, songs: list[str], max_results: int = 3) -> list[str]:
+    """
+    Up to max_results local files closest to query: substring matches first
+    (in library order), then a fuzzy fallback (via difflib) for typos/near
+    misses if nothing contains the query outright.
+    """
+    low = query.lower()
+    substring = [s for s in songs if low in os.path.basename(s).lower()]
+    if substring:
+        return substring[:max_results]
+    basenames = [os.path.basename(s) for s in songs]
+    close = difflib.get_close_matches(query, basenames, n=max_results, cutoff=0.4)
+    by_name = {os.path.basename(s): s for s in songs}
+    return [by_name[c] for c in close]
+
+
 def play_song(query: str = "") -> str:
     """
     Play a local mp3 matching the query.
-    If not found locally, search YouTube for up to 3 options, let the user
-    pick by voice or keyboard, then download and play the chosen one.
+    If there are multiple close local matches, ask which one (same
+    announce/repeat/pick UX as the YouTube search below). If nothing local
+    matches, search YouTube for up to 3 options, let the user pick, then
+    download and play the chosen one.
     """
     songs = sorted(glob(os.path.join(MUSIC_DIR, "*.mp3")))
 
@@ -390,10 +409,14 @@ def play_song(query: str = "") -> str:
             return "No songs in ~/music yet. Ask me to download one first."
         return _play_file(songs[0])
 
-    # 2. Query — look for a local match first
-    match = next((s for s in songs if query.lower() in os.path.basename(s).lower()), None)
-    if match:
-        return _play_file(match)
+    # 2. Query — look for local matches first
+    matches = _local_matches(query, songs)
+    if len(matches) == 1:
+        return _play_file(matches[0])
+    if matches:
+        titles = [os.path.splitext(os.path.basename(m))[0] for m in matches]
+        chosen_idx = _pick_from_voice(titles, _voice_mode)
+        return _play_file(matches[chosen_idx])
 
     # 3. Not found locally — search YouTube
     speak(f"I don't have {query} yet. Let me search for it.")
