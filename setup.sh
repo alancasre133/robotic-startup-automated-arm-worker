@@ -94,6 +94,12 @@ echo "==> Installing yt-dlp (song downloader)..."
 python3 -m pip install --break-system-packages yt-dlp 2>/dev/null || python3 -m pip install yt-dlp
 
 echo
+echo "==> Installing ffmpeg (yt-dlp needs it to convert downloads to mp3)..."
+# Without this, yt-dlp downloads the audio fine but fails at the very end
+# with "Postprocessing: ffprobe and ffmpeg not found" -- confirmed on-device.
+apt_install ffmpeg
+
+echo
 echo "==> Installing Vosk (offline speech recognition)..."
 python3 -m pip install --break-system-packages vosk 2>/dev/null || python3 -m pip install vosk
 
