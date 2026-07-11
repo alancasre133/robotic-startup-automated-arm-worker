@@ -279,8 +279,21 @@ def _download_by_title(title: str) -> str:
 
 
 def download_song(query: str) -> str:
-    """Download a song as mp3 using yt-dlp."""
-    return _download_by_title(query)
+    """
+    Search YouTube for up to 3 options, let the user pick by voice or
+    keyboard (or say "repeat" to hear the options again), then download
+    the chosen one as mp3.
+    """
+    options = _search_youtube(query, max_results=3)
+    if not options:
+        # search listing failed for some reason -- fall back to yt-dlp's
+        # own top-result search instead of failing outright
+        return _download_by_title(query)
+
+    chosen_idx = _pick_from_voice(options, _voice_mode)
+    chosen_title = options[chosen_idx]
+    speak(f"Downloading option {chosen_idx + 1}: {chosen_title}. Please wait.")
+    return _download_by_title(chosen_title)
 
 
 def _play_file(path: str) -> str:
@@ -297,39 +310,54 @@ def _play_file(path: str) -> str:
 
 def _pick_from_voice(options: list[str], voice_mode: bool) -> int:
     """
-    Ask the user to pick one of the options by voice or keyboard.
-    Returns the 0-based index of the chosen option.
-    Falls back to option 0 if the input is not understood.
+    Announce the options, then ask the user to pick one by voice or keyboard.
+    Returns the 0-based index of the chosen option. Saying/typing "repeat"
+    (or "again") re-announces the options instead of guessing. Falls back to
+    option 0 after a few unrecognized answers.
     """
     if len(options) == 1:
         return 0
     numbers = " or ".join(str(i + 1) for i in range(len(options)))
-    speak(f"Say option {numbers}. If I don't understand, I'll play the first one.")
-    try:
-        if voice_mode:
-            answer = transcribe()
-        else:
-            answer = input(f"pick (1-{len(options)})> ").strip()
-    except Exception:
-        return 0
-
-    low = answer.lower()
     word_sets = [
         ("1", "one", "first"),
         ("2", "two", "second"),
         ("3", "three", "third"),
     ][: len(options)]
-    # check higher options first so "the second one" matches "second", not "one"
-    for idx in range(len(word_sets) - 1, -1, -1):
-        if any(w in low for w in word_sets[idx]):
-            return idx
 
-    # try matching any part of an option title
-    for i, title in enumerate(options):
-        if any(word in title.lower() for word in low.split() if len(word) > 3):
-            return i
+    def _announce():
+        options_text = ". ".join(f"Option {i + 1}: {t}" for i, t in enumerate(options))
+        speak(f"I found {len(options)} options. {options_text}. "
+              f"Say option {numbers}, or say repeat to hear them again.")
 
-    speak("I didn't catch that, playing the first one.")
+    _announce()
+    for attempt in range(3):
+        try:
+            if voice_mode:
+                answer = transcribe()
+            else:
+                answer = input(f"pick (1-{len(options)}, or 'repeat')> ").strip()
+        except Exception:
+            return 0
+
+        low = answer.lower()
+        if any(w in low for w in ("repeat", "again", "say them", "say it", "options")):
+            _announce()
+            continue
+
+        # check higher options first so "the second one" matches "second", not "one"
+        for idx in range(len(word_sets) - 1, -1, -1):
+            if any(w in low for w in word_sets[idx]):
+                return idx
+
+        # try matching any part of an option title
+        for i, title in enumerate(options):
+            if any(word in title.lower() for word in low.split() if len(word) > 3):
+                return i
+
+        speak("I didn't catch that.")
+        _announce()
+
+    speak("I still didn't catch that, using the first one.")
     return 0
 
 
@@ -362,13 +390,7 @@ def play_song(query: str = "") -> str:
     if not options:
         return f"Could not find {query} online either."
 
-    # Read out the options
-    options_text = ". ".join(
-        f"Option {i + 1}: {title}" for i, title in enumerate(options)
-    )
-    speak(f"I found {len(options)} options. {options_text}.")
-
-    # Pick one
+    # Pick one (announces the options, supports "repeat")
     chosen_idx = _pick_from_voice(options, _voice_mode)
     chosen_title = options[chosen_idx]
     speak(f"Downloading option {chosen_idx + 1}: {chosen_title}. Please wait.")
