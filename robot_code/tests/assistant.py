@@ -305,7 +305,7 @@ def _play_file(path: str) -> str:
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )
-    sleep(0.3)  # give mpg123 a moment to fail fast (bad device, bad file, etc.)
+    sleep(1.5)  # give mpg123 a moment to fail fast (bad device, bad file, etc.)
     if _music_proc.poll() is not None:
         code = _music_proc.returncode
         err = _music_proc.stderr.read().decode(errors="replace").strip()
