@@ -303,8 +303,14 @@ def _play_file(path: str) -> str:
     _music_proc = subprocess.Popen(
         ["mpg123", "-q", "-a", AUDIO_DEVICE, path],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
     )
+    sleep(0.3)  # give mpg123 a moment to fail fast (bad device, bad file, etc.)
+    if _music_proc.poll() is not None:
+        code = _music_proc.returncode
+        err = _music_proc.stderr.read().decode(errors="replace").strip()
+        _music_proc = None
+        return f"Playback failed (mpg123 exit {code}): {err or '(no error output)'}"
     return f"Playing {os.path.basename(path)}."
 
 
