@@ -31,6 +31,7 @@ import time
 import threading
 
 import cv2
+from libcamera import Transform
 from picamera2 import Picamera2
 
 # Reuse the robot's voice + brain from assistant.py (same folder).
@@ -40,6 +41,7 @@ WIDTH, HEIGHT = 640, 480
 DETECT_SCALE = 0.5              # detect on a half-size frame => faster on the Pi 3
 COOLDOWN = 5.0                 # seconds of quiet after each face reaction
 DEFAULT_FACE_ACTION = "say papoi"
+FLIP_180 = True                 # camera is physically mounted upside down on this robot
 
 # --- face detector -----------------------------------------------------------
 _dir = getattr(getattr(cv2, "data", None), "haarcascades", "")
@@ -88,8 +90,9 @@ def face_loop():
     """Background: watch the camera, react when a face appears."""
     try:
         picam2 = Picamera2()
+        transform = Transform(hflip=1, vflip=1) if FLIP_180 else Transform()
         picam2.configure(picam2.create_video_configuration(
-            main={"size": (WIDTH, HEIGHT), "format": "RGB888"}))
+            main={"size": (WIDTH, HEIGHT), "format": "RGB888"}, transform=transform))
         picam2.start()
     except Exception as exc:
         print(f"[camera unavailable: {exc}] — face greeting off; typed commands still work")

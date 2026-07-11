@@ -15,11 +15,13 @@ import socketserver
 from http import server
 from threading import Condition
 
+from libcamera import Transform
 from picamera2 import Picamera2
 from picamera2.encoders import JpegEncoder
 from picamera2.outputs import FileOutput
 
 WIDTH, HEIGHT, PORT = 640, 480, 8000  # modest size — kinder to flaky WiFi
+FLIP_180 = True  # camera is physically mounted upside down on this robot
 
 PAGE = f"""<!doctype html>
 <title>Robot camera</title>
@@ -82,7 +84,8 @@ class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
 
 
 picam2 = Picamera2()
-picam2.configure(picam2.create_video_configuration(main={"size": (WIDTH, HEIGHT)}))
+transform = Transform(hflip=1, vflip=1) if FLIP_180 else Transform()
+picam2.configure(picam2.create_video_configuration(main={"size": (WIDTH, HEIGHT)}, transform=transform))
 output = StreamingOutput()
 picam2.start_recording(JpegEncoder(), FileOutput(output))
 print(f"Streaming on http://<pi-ip>:{PORT}   (Ctrl-C to stop)")

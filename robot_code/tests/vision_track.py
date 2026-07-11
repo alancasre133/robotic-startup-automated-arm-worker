@@ -36,6 +36,7 @@ from http import server
 from threading import Condition, Thread
 
 import cv2
+from libcamera import Transform
 from picamera2 import Picamera2
 
 # ---- config -----------------------------------------------------------------
@@ -44,6 +45,7 @@ DETECT_SCALE = 0.5        # detect on a half-size image => faster on the Pi 3
 DEAD_ZONE = 0.15          # |offset| under this (fraction of width) counts as centered
 PULSE = 0.12              # seconds the motors run per correction step
 DRIVE_MOTORS = False      # <<< set True to let it actually turn (WHEELS UP first!)
+FLIP_180 = True           # camera is physically mounted upside down on this robot
 
 # ---- motors (only imported/used if DRIVE_MOTORS) ----------------------------
 if DRIVE_MOTORS:
@@ -150,8 +152,9 @@ class StreamingServer(socketserver.ThreadingMixIn, server.HTTPServer):
 def vision_loop():
     picam2 = Picamera2()
     # "RGB888" gives an array OpenCV reads as BGR (colors come out correct).
+    transform = Transform(hflip=1, vflip=1) if FLIP_180 else Transform()
     picam2.configure(picam2.create_video_configuration(
-        main={"size": (WIDTH, HEIGHT), "format": "RGB888"}))
+        main={"size": (WIDTH, HEIGHT), "format": "RGB888"}, transform=transform))
     picam2.start()
     center_x = WIDTH / 2
     try:

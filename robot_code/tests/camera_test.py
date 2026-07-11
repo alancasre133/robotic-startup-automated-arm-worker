@@ -19,12 +19,16 @@ Then copy it to your computer to view (from your PC, not the Pi):
 import os
 from time import sleep
 
+from libcamera import Transform
 from picamera2 import Picamera2
+
+FLIP_180 = True  # camera is physically mounted upside down on this robot
 
 picam2 = Picamera2()
 
 # 1920x1080 keeps memory use low (CMA is cma-64). Raise once cma is bumped.
-picam2.configure(picam2.create_still_configuration(main={"size": (1920, 1080)}))
+transform = Transform(hflip=1, vflip=1) if FLIP_180 else Transform()
+picam2.configure(picam2.create_still_configuration(main={"size": (1920, 1080)}, transform=transform))
 
 picam2.start()
 sleep(2)  # let auto-exposure / white balance settle
