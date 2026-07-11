@@ -300,6 +300,11 @@ def _play_file(path: str) -> str:
     """Start playing an mp3 file immediately."""
     global _music_proc
     _stop_music()
+    # Print (don't speak) the "Playing ..." confirmation: speaking it would
+    # send aplay after the SAME exclusive ALSA hw device mpg123 just grabbed
+    # (AUDIO_DEVICE is a raw "plughw", not a software-mixed one) and one of
+    # the two loses with "Device or resource busy" -- confirmed on-device.
+    print(f"[robot] Playing {os.path.basename(path)}.")
     _music_proc = subprocess.Popen(
         ["mpg123", "-q", "-a", AUDIO_DEVICE, path],
         stdout=subprocess.DEVNULL,
@@ -311,7 +316,7 @@ def _play_file(path: str) -> str:
         err = _music_proc.stderr.read().decode(errors="replace").strip()
         _music_proc = None
         return f"Playback failed (mpg123 exit {code}): {err or '(no error output)'}"
-    return f"Playing {os.path.basename(path)}."
+    return ""
 
 
 def _pick_from_voice(options: list[str], voice_mode: bool) -> int:
@@ -754,7 +759,8 @@ def main() -> None:
                 break
 
             reply = think(user_text, history)
-            speak(reply)
+            if reply:
+                speak(reply)
 
     except (KeyboardInterrupt, EOFError):
         pass
