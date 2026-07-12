@@ -49,10 +49,13 @@ echo "==> Installing motor control libraries (gpiozero + lgpio)..."
 apt_install python3-gpiozero python3-lgpio
 
 echo
-echo "==> Installing camera stack (libcamera + picamera2)..."
+echo "==> Installing camera stack (libcamera + picamera2 + OpenCV)..."
 # For the IMX219 camera module. Installing now is harmless even with no camera
 # attached; it just makes things ready when the module is plugged in.
-apt_install python3-picamera2 rpicam-apps
+# python3-opencv (+ opencv-data for the Haar cascades) powers the vision scripts:
+# perception.py colour-blob object finding, vision_track.py / papoi.py face
+# detection. numpy comes in as a dependency of python3-opencv.
+apt_install python3-picamera2 rpicam-apps python3-opencv opencv-data
 
 echo
 echo "==> Enabling the IMX219 camera overlay in config.txt..."
