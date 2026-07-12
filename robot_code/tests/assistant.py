@@ -134,6 +134,10 @@ class _ForwardOnlyMotor:
 motor_a = motor_b = None
 _music_proc = None          # currently playing mpg123 process
 
+# Jab the motors a few times before steady drive to break static friction on a
+# heavy/top-heavy bot. Set False if the bot moves fine and you want instant, quiet starts.
+ROCK_START = True
+
 
 def _ensure_motors():
     global motor_a, motor_b
@@ -170,6 +174,22 @@ def robot_drive(direction: str, seconds: float = 1.0) -> str:
         "spin":     (a.forward,  b.backward),   # full spin (right motors fwd, left bwd)
     }
     left_fn, right_fn = moves[direction]
+
+    # "Rock" to break static friction on a heavy / top-heavy chassis. The motors
+    # are already driven at full voltage (pwm=False), so there's no "more power"
+    # to give — instead we jab in the target direction a few times to jolt the
+    # bot loose from a standstill, then commit to steady drive. Toggle with the
+    # ROCK_START flag. This only helps it START moving; it can't fix sustained
+    # crawling (that needs more volts or less weight — see HARDWARE.md).
+    if ROCK_START:
+        for _ in range(3):
+            left_fn()
+            right_fn()
+            sleep(0.12)
+            a.stop()
+            b.stop()
+            sleep(0.06)
+
     left_fn()
     right_fn()
     secs = min(seconds, 5)
