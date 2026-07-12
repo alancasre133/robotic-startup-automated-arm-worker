@@ -213,10 +213,10 @@ ARM_JOINTS = ("base", "shoulder", "elbow", "wrist", "wrist_rotate", "gripper")
 # move each joint to on startup, and what a "recenter" jog keypress returns
 # to. Defaults to 90 (servo midpoint) for every joint; override individual
 # joints here if their natural neutral position isn't 90 (e.g. gripper's
-# resting open/closed angle). shoulder/elbow centered at 45 (not 90) to clear
-# the chassis on this build -- confirmed on-device.
+# resting open/closed angle). shoulder/elbow tuned to clear the chassis on
+# this build -- confirmed on-device.
 ARM_CENTER_ANGLES = {j: 90.0 for j in ARM_JOINTS}
-ARM_CENTER_ANGLES["shoulder"] = 45.0
+ARM_CENTER_ANGLES["shoulder"] = 180.0
 ARM_CENTER_ANGLES["elbow"] = 45.0
 
 try:
