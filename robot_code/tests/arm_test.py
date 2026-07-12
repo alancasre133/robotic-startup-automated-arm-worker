@@ -20,7 +20,7 @@ Run:
     python3 robot_code/tests/arm_test.py
 """
 
-from assistant import ARM_JOINTS, robot_move_arm, _ensure_arm  # reuse the real arm code
+from assistant import ARM_JOINTS, ARM_CENTER_ANGLES, robot_move_arm, _ensure_arm  # reuse the real arm code
 
 
 def main():
@@ -32,19 +32,25 @@ def main():
         print("  - adafruit-circuitpython-pca9685 / adafruit-blinka installed?")
         return
 
-    print("PCA9685 found. Centering all joints to 90 degrees...")
+    print("PCA9685 found. Centering all joints to their ARM_CENTER_ANGLES...")
     for joint in ARM_JOINTS:
-        robot_move_arm(joint, 90)
+        robot_move_arm(joint, ARM_CENTER_ANGLES[joint])
     input("\nAll joints centered — press Enter to test them one at a time.")
 
     for joint in ARM_JOINTS:
-        input(f"\n-- {joint} -- press Enter to sweep 60 -> 120 -> 90")
-        robot_move_arm(joint, 60)
-        input(f"   {joint} at 60 degrees. Enter to continue -> 120")
-        robot_move_arm(joint, 120)
-        input(f"   {joint} at 120 degrees. Enter to continue -> back to 90 (center)")
-        robot_move_arm(joint, 90)
-        print(f"   {joint} back at 90. Did it move smoothly and in the right direction?")
+        center = ARM_CENTER_ANGLES[joint]
+        # Sweep +/-30 degrees around THIS joint's own center, clamped to the
+        # 0-180 servo range (a fixed 60/120 sweep doesn't make sense once
+        # some joints center far from 90 -- e.g. shoulder centers at 180).
+        low = max(0.0, center - 30)
+        high = min(180.0, center + 30)
+        input(f"\n-- {joint} (center {center:.0f}) -- press Enter to sweep {low:.0f} -> {high:.0f} -> {center:.0f}")
+        robot_move_arm(joint, low)
+        input(f"   {joint} at {low:.0f} degrees. Enter to continue -> {high:.0f}")
+        robot_move_arm(joint, high)
+        input(f"   {joint} at {high:.0f} degrees. Enter to continue -> back to {center:.0f} (center)")
+        robot_move_arm(joint, center)
+        print(f"   {joint} back at {center:.0f}. Did it move smoothly and in the right direction?")
 
     print("\nAll joints tested. If one moved the wrong way, or not at all, check that")
     print("servo's channel number (0-5, in ARM_JOINTS order) and connector orientation.")

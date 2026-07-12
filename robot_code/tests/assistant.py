@@ -635,7 +635,7 @@ def local_brain(user_text: str) -> str:
     if "arm" in t or any(_joint_in_text(j) for j in ARM_JOINTS):
         joint = next((j for j in _joints_by_specificity if _joint_in_text(j)), "base")
         m = re.search(r"(-?\d+(?:\.\d+)?)", t)
-        return robot_move_arm(joint, float(m.group(1)) if m else 90.0)
+        return robot_move_arm(joint, float(m.group(1)) if m else ARM_CENTER_ANGLES[joint])
 
     # spin / turn
     if "spin" in t:
