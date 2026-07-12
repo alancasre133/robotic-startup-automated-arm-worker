@@ -33,20 +33,19 @@ STOP_DISTANCE  = 0.25     # metres — stop if obstacle is closer than this
 TURN_TIME      = 0.8      # seconds to turn when blocked
 POLL_INTERVAL  = 0.05     # seconds between distance readings
 
+# Jab the motors a few times to break static friction before committing to
+# steady drive -- same approach (and timing) as ROCK_START in assistant.py /
+# rock_test.py, needed once the arm's extra weight made a cold start
+# unreliable. Only applied on the stopped->moving transition, not every poll.
+ROCK_START = True
+JABS    = 3
+JAB_ON  = 0.12
+JAB_OFF = 0.06
+
 # --- Hardware ----------------------------------------------------------------
 sensor  = DistanceSensor(echo=ECHO_PIN, trigger=TRIG_PIN, max_distance=2.0)
 motor_a = Motor(forward=16, backward=20, pwm=False)
 motor_b = Motor(forward=27, backward=22, pwm=False)
-
-
-def drive_forward():
-    motor_a.forward()
-    motor_b.forward()
-
-
-def turn_right():
-    motor_a.forward()
-    motor_b.backward()
 
 
 def stop():
@@ -54,10 +53,32 @@ def stop():
     motor_b.stop()
 
 
+def _start(left_fn, right_fn):
+    """Commit to a direction, rocking first to break static friction if enabled."""
+    if ROCK_START:
+        for _ in range(JABS):
+            left_fn()
+            right_fn()
+            sleep(JAB_ON)
+            stop()
+            sleep(JAB_OFF)
+    left_fn()
+    right_fn()
+
+
+def drive_forward():
+    _start(motor_a.forward, motor_b.forward)
+
+
+def turn_right():
+    _start(motor_a.forward, motor_b.backward)
+
+
 # --- Main loop ---------------------------------------------------------------
 def main():
     print(f"Obstacle avoidance running. Stop distance: {STOP_DISTANCE * 100:.0f} cm")
     print("Press Ctrl-C to stop.\n")
+    moving = False  # only rock-start on the stopped->moving transition, not every poll
     try:
         while True:
             dist = sensor.distance          # metres
@@ -66,12 +87,15 @@ def main():
             if dist < STOP_DISTANCE:
                 print(f"\n[!] Obstacle at {dist * 100:.1f} cm — stopping and turning")
                 stop()
+                moving = False
                 sleep(0.2)
-                turn_right()
+                turn_right()  # rocks itself -- it's always a start-from-stop
                 sleep(TURN_TIME)
                 stop()
-            else:
-                drive_forward()
+            elif not moving:
+                drive_forward()  # rocks itself, then commits to steady drive
+                moving = True
+            # else: already driving forward steadily -- nothing to do this poll
 
             sleep(POLL_INTERVAL)
 
