@@ -422,6 +422,28 @@ def look_for_object(color: str = "red") -> dict:
         return {"seen": False, "error": str(exc)}
 
 
+def best_distance(color: str = "red"):
+    """Best available distance-to-object in cm, plus where it came from.
+
+    Prefers the ultrasonic (a true measurement). If the ultrasonic returns -1 —
+    the object is outside its narrow forward beam, or it isn't wired — it falls
+    back to the LEARNED camera estimate from distance_calibrate.py. This is what
+    makes the calibration actually useful: the robot can judge distance from what
+    it sees, not just from the sonar. Returns (cm, source) where source is
+    'ultrasonic', 'camera', or 'none' (with cm = -1).
+    """
+    d = distance_ahead()
+    if d >= 0:
+        return d, "ultrasonic"
+    if _ensure_camera() is not None and _perception is not None:
+        r = look_for_object(color)
+        if r.get("seen"):
+            est = _perception.estimate_distance(r["area_frac"])
+            if est >= 0:
+                return est, "camera"
+    return -1.0, "none"
+
+
 def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
     """Find a coloured object with the camera, line up on it, approach with the
     ultrasonic, then grab. Degrades gracefully: no camera -> drive straight
@@ -455,10 +477,11 @@ def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
                     robot_drive("right", 0.2)
                     continue
 
-            # 2. Lined up (or no camera) — approach using the ultrasonic.
-            d = distance_ahead()
+            # 2. Lined up (or no camera) — approach. Prefer the ultrasonic; if it
+            #    can't see the object, fall back to the LEARNED camera estimate.
+            d, source = best_distance(color)
             if d < 0:
-                speak("No distance sensor, doing a blind grab.")
+                speak("I can't judge the distance, doing a blind grab.")
                 break
             if d <= ARM_REACH_CM:
                 # In reach. We don't back off when very close: Motor A can't
@@ -466,7 +489,8 @@ def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
                 # "backward" would pivot and lose the object. Grab from here.
                 speak("In reach.")
                 break
-            speak(f"{d:.0f} centimeters, moving closer.")
+            via = "" if source == "ultrasonic" else " by camera"
+            speak(f"{d:.0f} centimeters{via}, moving closer.")
             robot_drive("forward", 0.4)            # short burst so we don't overshoot
         else:
             return "I couldn't line up on it."
