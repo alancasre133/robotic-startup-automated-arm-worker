@@ -362,15 +362,15 @@ def grab_sequence(max_approaches: int = 6) -> str:
         if d < 0:
             speak("No distance sensor connected, trying a blind grab.")
             break
-        if d <= STOP_CM:
-            speak("Too close, backing up a little.")
-            robot_drive("backward", 0.3)
-            continue
         if d <= ARM_REACH_CM:
+            # In reach (anything from touching out to ARM_REACH_CM). We do NOT
+            # try to back off when very close: Motor A can't reverse right now
+            # (loose A-1A wire — see MOTOR_A_A1A_STUCK), so "backward" would
+            # pivot the bot and lose the object. Grab from wherever we are.
             speak("In reach.")
             break
         speak(f"{d:.0f} centimeters away, moving closer.")
-        robot_drive("forward", 0.4)     # short burst so we don't overshoot
+        robot_drive("forward", 0.4)     # short forward burst so we don't overshoot
     else:
         return "I couldn't get in reach of anything."
 
