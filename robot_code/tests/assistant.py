@@ -270,6 +270,125 @@ def robot_move_arm(joint: str, angle: float) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Arm poses + gripper — named presets used by the grab behaviour
+# ---------------------------------------------------------------------------
+# ⚠️ CALIBRATE THESE ON THE ROBOT with arm_jog_test.py. The angles below are
+# neutral guesses, NOT tuned to your arm — jog each joint to the pose you want,
+# then copy the numbers in. Wrong angles can make the arm hit itself or the
+# chassis: move slowly the first time and keep a hand near the power.
+ARM_POSES = {
+    # base shoulder elbow wrist wrist_rotate  (gripper handled separately below)
+    "home":  {"base": 90, "shoulder": 90, "elbow": 90, "wrist": 90, "wrist_rotate": 90},
+    "ready": {"base": 90, "shoulder": 60, "elbow": 90, "wrist": 90, "wrist_rotate": 90},
+    "reach": {"base": 90, "shoulder": 40, "elbow": 120, "wrist": 100, "wrist_rotate": 90},
+    "lift":  {"base": 90, "shoulder": 90, "elbow": 90, "wrist": 90, "wrist_rotate": 90},
+    "drop":  {"base": 90, "shoulder": 40, "elbow": 120, "wrist": 100, "wrist_rotate": 90},
+}
+GRIPPER_OPEN = 120.0    # calibrate: angle where the gripper is fully open
+GRIPPER_CLOSE = 55.0    # calibrate: angle where it grips an object
+
+ARM_REACH_CM = 15.0     # how far ahead the arm can reach (calibrate for your arm)
+STOP_CM = 5.0           # never drive forward when something is this close
+
+
+def arm_pose(name: str) -> str:
+    """Move the whole arm to a named pose (home/ready/reach/lift/drop)."""
+    pose = ARM_POSES.get(name)
+    if pose is None:
+        return f"Unknown arm pose: {name}. Try home, ready, reach, lift, or drop."
+    for joint, angle in pose.items():
+        robot_move_arm(joint, angle)
+        sleep(0.15)     # let each servo travel a little before the next
+    return f"Arm at {name}."
+
+
+def gripper(state: str) -> str:
+    """Open or close the gripper (the hand)."""
+    angle = GRIPPER_OPEN if state == "open" else GRIPPER_CLOSE
+    robot_move_arm("gripper", angle)
+    return f"Gripper {state}."
+
+
+# ---------------------------------------------------------------------------
+# Sensing — HC-SR04 ultrasonic (forward distance)
+# ---------------------------------------------------------------------------
+# Confirmed wiring (physical pins): Trig -> pin 33 (GPIO13), Echo -> pin 35
+# (GPIO19) via a 1k/2k divider. Same as obstacle_avoid.py.
+TRIG_PIN = 13           # BCM
+ECHO_PIN = 19           # BCM
+_distance_sensor = None
+_distance_unavailable = False
+
+
+def distance_ahead() -> float:
+    """Distance in cm to the nearest object ahead. Returns -1 if no sensor.
+
+    Lazy-inits the HC-SR04 on first call (like the motors/arm) so merely
+    importing this module never touches the GPIO pins.
+    """
+    global _distance_sensor, _distance_unavailable
+    if _distance_unavailable:
+        return -1.0
+    if _distance_sensor is None:
+        try:
+            from gpiozero import DistanceSensor
+            _distance_sensor = DistanceSensor(
+                echo=ECHO_PIN, trigger=TRIG_PIN, max_distance=2.0
+            )
+        except Exception:
+            _distance_unavailable = True
+            return -1.0
+    try:
+        return _distance_sensor.distance * 100.0    # metres -> cm
+    except Exception:
+        return -1.0
+
+
+def grab_sequence(max_approaches: int = 6) -> str:
+    """Ultrasonic-only pick-up: approach until in reach, then grab.
+
+    Drives forward in short bursts until the nearest object ahead is within
+    ARM_REACH_CM, then extends the arm, closes the gripper, and lifts. This is
+    the offline brain's version; the Claude brain does the same thing but
+    reasons between steps, using the distance_ahead / drive / arm_pose / gripper
+    tools (see the grab strategy in SYSTEM).
+    """
+    speak("Okay, let me try to grab it.")
+    arm_pose("ready")
+    gripper("open")
+
+    for _ in range(max_approaches):
+        d = distance_ahead()
+        if d < 0:
+            speak("No distance sensor connected, trying a blind grab.")
+            break
+        if d <= STOP_CM:
+            speak("Too close, backing up a little.")
+            robot_drive("backward", 0.3)
+            continue
+        if d <= ARM_REACH_CM:
+            speak("In reach.")
+            break
+        speak(f"{d:.0f} centimeters away, moving closer.")
+        robot_drive("forward", 0.4)     # short burst so we don't overshoot
+    else:
+        return "I couldn't get in reach of anything."
+
+    arm_pose("reach")
+    gripper("close")
+    arm_pose("lift")
+    return "Got it."
+
+
+def release_sequence() -> str:
+    """Put down whatever the gripper is holding."""
+    arm_pose("drop")
+    gripper("open")
+    arm_pose("home")
+    return "Dropped it."
+
+
+# ---------------------------------------------------------------------------
 # Music
 # ---------------------------------------------------------------------------
 def _stop_music() -> str:
@@ -540,6 +659,33 @@ TOOLS = [
         "description": "Stop whatever song is currently playing.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "distance_ahead",
+        "description": "Measure the distance in centimetres to the nearest object directly in front of the robot, using the forward ultrasonic sensor. Returns -1 if the sensor isn't connected. Use this to decide whether an object is within arm's reach or whether to drive closer.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "arm_pose",
+        "description": "Move the whole arm to a named pose: home (neutral/tucked), ready (raised to begin a grab), reach (extended forward and down to the object), lift (raised while holding an object), or drop (extended to release).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "enum": ["home", "ready", "reach", "lift", "drop"]},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "gripper",
+        "description": "Open or close the gripper (the robot's hand).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "state": {"type": "string", "enum": ["open", "close"]},
+            },
+            "required": ["state"],
+        },
+    },
 ]
 
 
@@ -554,14 +700,33 @@ def run_tool(name: str, tool_input: dict) -> str:
         return download_song(tool_input["query"])
     if name == "stop_music":
         return _stop_music()
+    if name == "distance_ahead":
+        d = distance_ahead()
+        return f"{d:.0f} cm ahead." if d >= 0 else "Distance sensor not connected (returns -1)."
+    if name == "arm_pose":
+        return arm_pose(tool_input["name"])
+    if name == "gripper":
+        return gripper(tool_input["state"])
     return f"Unknown tool: {name}"
 
 
 SYSTEM = (
-    "You are the brain of a small robot car. You can drive, move the arm, "
-    "play or download songs, and chat. Keep spoken replies short (1-2 sentences) "
-    "since they are read aloud. Only drive or move when the user asks. "
-    "If asked to download AND play, download first, then play."
+    "You are the brain of a small robot car with a gripper arm, a forward-facing "
+    "ultrasonic distance sensor, wheels, and a speaker. You can drive, move the "
+    "arm, grab and release objects, play or download songs, and chat. Keep spoken "
+    "replies short (1-2 sentences) since they are read aloud. Only act when asked.\n\n"
+    "HOW TO GRAB / PICK UP AN OBJECT — you have no camera targeting, so use the "
+    "distance sensor to approach, then the arm to grab:\n"
+    "1. arm_pose('ready'), then gripper('open').\n"
+    "2. Call distance_ahead. If it returns -1 the sensor is off — tell the user you "
+    "can't sense distance and stop (or do a single blind reach only if they insist).\n"
+    "3. If the object is more than ~15 cm away, drive('forward', 0.4), then measure "
+    "distance_ahead again. Repeat until within ~15 cm. Never drive more than 0.5 s "
+    "between measurements, and never drive forward when distance is under 5 cm.\n"
+    "4. When within reach: arm_pose('reach'), gripper('close'), arm_pose('lift').\n"
+    "5. To put it down: arm_pose('drop'), gripper('open'), arm_pose('home').\n"
+    "Narrate briefly as you go ('moving closer', 'in reach', 'got it'). "
+    "If asked to download AND play a song, download first, then play."
 )
 
 
@@ -631,6 +796,17 @@ def local_brain(user_text: str) -> str:
     # say
     if t.startswith("say "):
         return user_text.strip()[4:].strip()
+
+    # grab / pick up — ultrasonic approach + arm sequence
+    if "grab" in t or "pick up" in t or "pick it up" in t:
+        return grab_sequence()
+    # put down / release
+    if any(p in t for p in ("put down", "put it down", "drop", "release", "let go")):
+        return release_sequence()
+    # distance query
+    if "how far" in t or "distance" in t:
+        d = distance_ahead()
+        return f"{d:.0f} centimeters ahead." if d >= 0 else "Distance sensor not connected."
 
     # arm — check longer/more specific joint names first (e.g. "wrist_rotate"
     # before "wrist", since "wrist" is a substring of it) and accept "wrist
