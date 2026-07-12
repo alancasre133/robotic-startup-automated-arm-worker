@@ -137,6 +137,10 @@ _music_proc = None          # currently playing mpg123 process
 # Jab the motors a few times before steady drive to break static friction on a
 # heavy/top-heavy bot. Set False if the bot moves fine and you want instant, quiet starts.
 ROCK_START = True
+# One round of jabbing isn't always enough at this weight -- confirmed on-device,
+# it sometimes took several manual re-runs of rock_test.py before it broke loose.
+# Automate that instead of making the user relaunch the script repeatedly.
+ROCK_ROUNDS = 3
 
 
 def _ensure_motors():
@@ -179,16 +183,20 @@ def robot_drive(direction: str, seconds: float = 1.0) -> str:
     # are already driven at full voltage (pwm=False), so there's no "more power"
     # to give — instead we jab in the target direction a few times to jolt the
     # bot loose from a standstill, then commit to steady drive. Toggle with the
-    # ROCK_START flag. This only helps it START moving; it can't fix sustained
+    # ROCK_START flag. Repeated ROCK_ROUNDS times since one round doesn't always
+    # break it loose. This only helps it START moving; it can't fix sustained
     # crawling (that needs more volts or less weight — see HARDWARE.md).
     if ROCK_START:
-        for _ in range(3):
-            left_fn()
-            right_fn()
-            sleep(0.12)
-            a.stop()
-            b.stop()
-            sleep(0.06)
+        for _round in range(ROCK_ROUNDS):
+            for _ in range(3):
+                left_fn()
+                right_fn()
+                sleep(0.12)
+                a.stop()
+                b.stop()
+                sleep(0.06)
+            if _round < ROCK_ROUNDS - 1:
+                sleep(0.25)  # let it settle before the next round
 
     left_fn()
     right_fn()

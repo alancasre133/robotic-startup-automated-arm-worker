@@ -41,6 +41,10 @@ ROCK_START = True
 JABS    = 3
 JAB_ON  = 0.12
 JAB_OFF = 0.06
+# One round of jabbing isn't always enough at this weight -- confirmed
+# on-device, it sometimes took several manual re-runs before it broke loose.
+# Automate that instead of leaving it to relaunch the script.
+ROCK_ROUNDS = 3
 
 # --- Hardware ----------------------------------------------------------------
 sensor  = DistanceSensor(echo=ECHO_PIN, trigger=TRIG_PIN, max_distance=2.0)
@@ -56,12 +60,15 @@ def stop():
 def _start(left_fn, right_fn):
     """Commit to a direction, rocking first to break static friction if enabled."""
     if ROCK_START:
-        for _ in range(JABS):
-            left_fn()
-            right_fn()
-            sleep(JAB_ON)
-            stop()
-            sleep(JAB_OFF)
+        for _round in range(ROCK_ROUNDS):
+            for _ in range(JABS):
+                left_fn()
+                right_fn()
+                sleep(JAB_ON)
+                stop()
+                sleep(JAB_OFF)
+            if _round < ROCK_ROUNDS - 1:
+                sleep(0.25)  # let it settle before the next round
     left_fn()
     right_fn()
 

@@ -19,9 +19,14 @@ from time import sleep
 motor_a = Motor(forward=16, backward=20, pwm=False)
 motor_b = Motor(forward=27, backward=22, pwm=False)
 
-JABS = 4          # number of jolts
+JABS = 4          # number of jolts per round
 JAB_ON = 0.12     # seconds powered per jolt
 JAB_OFF = 0.06    # seconds resting between jolts
+ROUNDS = 3        # one round of jabbing isn't always enough at this weight --
+                  # confirmed on-device, it sometimes took several manual
+                  # re-runs of this script before it broke loose. This loops
+                  # that automatically instead of you relaunching it by hand.
+ROUND_PAUSE = 0.25  # seconds to settle between rounds
 DRIVE = 1.5       # seconds of steady drive after the rock
 
 
@@ -36,13 +41,17 @@ def stop():
 
 
 try:
-    print(f"Rocking: {JABS} jabs, then {DRIVE}s steady drive forward...")
-    for i in range(JABS):
-        print(f"  jab {i + 1}/{JABS}")
-        drive_forward()
-        sleep(JAB_ON)
-        stop()
-        sleep(JAB_OFF)
+    print(f"Rocking: {ROUNDS} round(s) of {JABS} jabs, then {DRIVE}s steady drive forward...")
+    for r in range(ROUNDS):
+        print(f"round {r + 1}/{ROUNDS}")
+        for i in range(JABS):
+            print(f"  jab {i + 1}/{JABS}")
+            drive_forward()
+            sleep(JAB_ON)
+            stop()
+            sleep(JAB_OFF)
+        if r < ROUNDS - 1:
+            sleep(ROUND_PAUSE)
 
     print("Steady drive...")
     drive_forward()
