@@ -257,15 +257,40 @@ def _ensure_arm():
     return _pca
 
 
-def robot_move_arm(joint: str, angle: float) -> str:
-    """Move one arm joint (PCA9685 servo) to an angle in degrees (0-180)."""
+# Remember each joint's last commanded angle so smooth moves can step from where
+# the joint actually is, 1 degree at a time.
+_arm_current = {}
+SMOOTH_STEP = 1.0       # degrees per step when moving smoothly
+SMOOTH_DELAY = 0.02     # seconds between steps (0.02 * 90 steps ≈ 1.8s per 90°)
+
+
+def robot_move_arm(joint: str, angle: float, smooth: bool = False) -> str:
+    """Move one arm joint (PCA9685 servo) to an angle in degrees (0-180).
+
+    smooth=True steps 1 degree at a time (SMOOTH_STEP) with a short pause between
+    steps, so the arm glides instead of snapping — gentler on the servos and less
+    likely to fling or knock the object. The first move of a joint (unknown
+    starting angle) jumps directly; after that it interpolates from the last
+    commanded angle.
+    """
     if not _ARM_LIBS_AVAILABLE:
         return "Arm libraries not installed — see docs/arm-setup.md"
     if _ensure_arm() is None:
         return "Arm not connected (PCA9685 not found on I2C) — check wiring."
     joint = joint if joint in ARM_JOINTS else "base"
     angle = max(0.0, min(180.0, angle))
+
+    if smooth and joint in _arm_current:
+        cur = _arm_current[joint]
+        step = SMOOTH_STEP if angle >= cur else -SMOOTH_STEP
+        a = cur
+        while abs(a - angle) > abs(step):
+            a += step
+            _arm_servos[joint].angle = a
+            sleep(SMOOTH_DELAY)
+
     _arm_servos[joint].angle = angle
+    _arm_current[joint] = angle
     return f"Moved {joint} to {angle:.0f} degrees."
 
 
@@ -291,21 +316,25 @@ ARM_REACH_CM = 15.0     # how far ahead the arm can reach (calibrate for your ar
 STOP_CM = 5.0           # never drive forward when something is this close
 
 
-def arm_pose(name: str) -> str:
-    """Move the whole arm to a named pose (home/ready/reach/lift/drop)."""
+def arm_pose(name: str, smooth: bool = True) -> str:
+    """Move the whole arm to a named pose (home/ready/reach/lift/drop).
+
+    Smooth by default — each joint glides 1 degree at a time, one joint after
+    another, so the whole arm moves calmly.
+    """
     pose = ARM_POSES.get(name)
     if pose is None:
         return f"Unknown arm pose: {name}. Try home, ready, reach, lift, or drop."
     for joint, angle in pose.items():
-        robot_move_arm(joint, angle)
-        sleep(0.15)     # let each servo travel a little before the next
+        robot_move_arm(joint, angle, smooth=smooth)
     return f"Arm at {name}."
 
 
 def gripper(state: str) -> str:
-    """Open or close the gripper (the hand)."""
+    """Open or close the gripper (the hand). Closes gently, 1 degree at a time,
+    so it settles onto the object instead of snapping shut."""
     angle = GRIPPER_OPEN if state == "open" else GRIPPER_CLOSE
-    robot_move_arm("gripper", angle)
+    robot_move_arm("gripper", angle, smooth=True)
     return f"Gripper {state}."
 
 
@@ -344,40 +373,110 @@ def distance_ahead() -> float:
         return -1.0
 
 
-def grab_sequence(max_approaches: int = 6) -> str:
-    """Ultrasonic-only pick-up: approach until in reach, then grab.
+# ---------------------------------------------------------------------------
+# Sensing — camera (colour-blob object finding, via perception.py)
+# ---------------------------------------------------------------------------
+# perception.py imports picamera2 + OpenCV, which the arm/motor-only scripts
+# don't need — so import it lazily, only when the camera is actually used.
+_perception = None
+_camera = None
+_camera_unavailable = False
+CENTER_DEADZONE = 0.15      # |offset| under this counts as centred
 
-    Drives forward in short bursts until the nearest object ahead is within
-    ARM_REACH_CM, then extends the arm, closes the gripper, and lifts. This is
-    the offline brain's version; the Claude brain does the same thing but
-    reasons between steps, using the distance_ahead / drive / arm_pose / gripper
-    tools (see the grab strategy in SYSTEM).
+
+def _ensure_camera():
+    """Open the camera on first use (single-user; falls back to None if busy)."""
+    global _perception, _camera, _camera_unavailable
+    if _camera is not None or _camera_unavailable:
+        return _camera
+    try:
+        import perception
+        _perception = perception
+        _camera = perception.open_camera()
+    except Exception as exc:
+        print(f"[camera unavailable: {exc}] — grab will use the ultrasonic only")
+        _camera_unavailable = True
+        _camera = None
+    return _camera
+
+
+def _close_camera():
+    """Release the camera so the stream service (or next run) can use it."""
+    global _camera
+    if _camera is not None:
+        try:
+            _camera.stop()
+        except Exception:
+            pass
+        _camera = None
+
+
+def look_for_object(color: str = "red") -> dict:
+    """Ask the camera where the largest `color` object is. See perception.find_object."""
+    cam = _ensure_camera()
+    if cam is None or _perception is None:
+        return {"seen": False, "error": "camera unavailable"}
+    try:
+        return _perception.find_object(cam, color)
+    except Exception as exc:
+        return {"seen": False, "error": str(exc)}
+
+
+def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
+    """Find a coloured object with the camera, line up on it, approach with the
+    ultrasonic, then grab. Degrades gracefully: no camera -> drive straight
+    forward and grab whatever's ahead; no distance sensor -> a single blind grab.
+
+    This is the offline brain's version; the Claude brain does the same thing but
+    reasons between steps, using look_for_object / distance_ahead / drive /
+    arm_pose / gripper (see the grab strategy in SYSTEM).
     """
-    speak("Okay, let me try to grab it.")
+    speak(f"Okay, looking for a {color} object.")
     arm_pose("ready")
     gripper("open")
+    have_cam = _ensure_camera() is not None
 
-    for _ in range(max_approaches):
-        d = distance_ahead()
-        if d < 0:
-            speak("No distance sensor connected, trying a blind grab.")
-            break
-        if d <= ARM_REACH_CM:
-            # In reach (anything from touching out to ARM_REACH_CM). We do NOT
-            # try to back off when very close: Motor A can't reverse right now
-            # (loose A-1A wire — see MOTOR_A_A1A_STUCK), so "backward" would
-            # pivot the bot and lose the object. Grab from wherever we are.
-            speak("In reach.")
-            break
-        speak(f"{d:.0f} centimeters away, moving closer.")
-        robot_drive("forward", 0.4)     # short forward burst so we don't overshoot
-    else:
-        return "I couldn't get in reach of anything."
+    try:
+        for _ in range(max_steps):
+            # 1. See it and centre it (if the camera is available).
+            if have_cam:
+                r = look_for_object(color)
+                if not r.get("seen"):
+                    speak("I don't see it, turning to look.")
+                    robot_drive("right", 0.3)      # sweep to search
+                    continue
+                off = r["offset"]
+                if off < -CENTER_DEADZONE:
+                    speak("Turning left toward it.")
+                    robot_drive("left", 0.2)
+                    continue
+                if off > CENTER_DEADZONE:
+                    speak("Turning right toward it.")
+                    robot_drive("right", 0.2)
+                    continue
 
-    arm_pose("reach")
-    gripper("close")
-    arm_pose("lift")
-    return "Got it."
+            # 2. Lined up (or no camera) — approach using the ultrasonic.
+            d = distance_ahead()
+            if d < 0:
+                speak("No distance sensor, doing a blind grab.")
+                break
+            if d <= ARM_REACH_CM:
+                # In reach. We don't back off when very close: Motor A can't
+                # reverse right now (loose A-1A wire — MOTOR_A_A1A_STUCK), so
+                # "backward" would pivot and lose the object. Grab from here.
+                speak("In reach.")
+                break
+            speak(f"{d:.0f} centimeters, moving closer.")
+            robot_drive("forward", 0.4)            # short burst so we don't overshoot
+        else:
+            return "I couldn't line up on it."
+
+        arm_pose("reach")
+        gripper("close")
+        arm_pose("lift")
+        return "Got it."
+    finally:
+        _close_camera()    # free the camera for the stream service / next grab
 
 
 def release_sequence() -> str:
@@ -665,6 +764,17 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "look_for_object",
+        "description": "Use the camera to find a coloured object. Reports whether it's seen, its bearing (left/centred/right, as an offset from -0.5 to +0.5), and its apparent size (bigger = closer). Use this to aim: turn until the object is centred, THEN use distance_ahead to approach.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "color": {"type": "string", "enum": ["red", "green", "blue", "yellow"]},
+            },
+            "required": ["color"],
+        },
+    },
+    {
         "name": "arm_pose",
         "description": "Move the whole arm to a named pose: home (neutral/tucked), ready (raised to begin a grab), reach (extended forward and down to the object), lift (raised while holding an object), or drop (extended to release).",
         "input_schema": {
@@ -703,6 +813,15 @@ def run_tool(name: str, tool_input: dict) -> str:
     if name == "distance_ahead":
         d = distance_ahead()
         return f"{d:.0f} cm ahead." if d >= 0 else "Distance sensor not connected (returns -1)."
+    if name == "look_for_object":
+        r = look_for_object(tool_input.get("color", "red"))
+        if r.get("error"):
+            return f"Camera unavailable ({r['error']}) — use the ultrasonic instead."
+        if not r["seen"]:
+            return "No object of that colour is visible."
+        off = r["offset"]
+        side = "left" if off < -CENTER_DEADZONE else "right" if off > CENTER_DEADZONE else "centred"
+        return f"Seen, {side} (offset {off:+.2f}); apparent size {r['area_frac'] * 100:.1f}% of the frame."
     if name == "arm_pose":
         return arm_pose(tool_input["name"])
     if name == "gripper":
@@ -715,17 +834,21 @@ SYSTEM = (
     "ultrasonic distance sensor, wheels, and a speaker. You can drive, move the "
     "arm, grab and release objects, play or download songs, and chat. Keep spoken "
     "replies short (1-2 sentences) since they are read aloud. Only act when asked.\n\n"
-    "HOW TO GRAB / PICK UP AN OBJECT — you have no camera targeting, so use the "
-    "distance sensor to approach, then the arm to grab:\n"
+    "HOW TO GRAB / PICK UP AN OBJECT — aim with the camera, judge distance with "
+    "the ultrasonic, then grab with the arm:\n"
     "1. arm_pose('ready'), then gripper('open').\n"
-    "2. Call distance_ahead. If it returns -1 the sensor is off — tell the user you "
-    "can't sense distance and stop (or do a single blind reach only if they insist).\n"
-    "3. If the object is more than ~15 cm away, drive('forward', 0.4), then measure "
-    "distance_ahead again. Repeat until within ~15 cm. Never drive more than 0.5 s "
-    "between measurements, and never drive forward when distance is under 5 cm.\n"
-    "4. When within reach: arm_pose('reach'), gripper('close'), arm_pose('lift').\n"
-    "5. To put it down: arm_pose('drop'), gripper('open'), arm_pose('home').\n"
-    "Narrate briefly as you go ('moving closer', 'in reach', 'got it'). "
+    "2. look_for_object(color). If the camera is unavailable, skip aiming and just "
+    "approach straight ahead. If the object isn't seen, drive('right', 0.3) to sweep "
+    "and look again.\n"
+    "3. If it's seen but the offset is more negative than -0.15, drive('left', 0.2); "
+    "if more positive than +0.15, drive('right', 0.2). Re-look until it's centred.\n"
+    "4. Once centred, use distance_ahead. If more than ~15 cm, drive('forward', 0.4), "
+    "then measure again. Repeat until within ~15 cm. Never drive more than 0.5 s "
+    "between measurements, and never drive forward when distance is under 5 cm. "
+    "(This robot can't reverse right now, so don't try to back up.)\n"
+    "5. When within reach: arm_pose('reach'), gripper('close'), arm_pose('lift').\n"
+    "6. To put it down: arm_pose('drop'), gripper('open'), arm_pose('home').\n"
+    "Narrate briefly as you go ('turning toward it', 'moving closer', 'got it'). "
     "If asked to download AND play a song, download first, then play."
 )
 
@@ -797,9 +920,10 @@ def local_brain(user_text: str) -> str:
     if t.startswith("say "):
         return user_text.strip()[4:].strip()
 
-    # grab / pick up — ultrasonic approach + arm sequence
+    # grab / pick up — camera-aim + ultrasonic approach + arm sequence
     if "grab" in t or "pick up" in t or "pick it up" in t:
-        return grab_sequence()
+        color = next((c for c in ("red", "green", "blue", "yellow") if c in t), "red")
+        return grab_sequence(color)
     # put down / release
     if any(p in t for p in ("put down", "put it down", "drop", "release", "let go")):
         return release_sequence()
