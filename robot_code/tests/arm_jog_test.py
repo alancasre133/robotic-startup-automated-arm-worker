@@ -10,6 +10,7 @@ Controls:
     LEFT / RIGHT   nudge the current joint's angle by 5 degrees
     Enter          go to the next joint
     b              go back to the previous joint
+    c              recenter the current joint (back to its center angle)
     q              quit
 
 SAFETY:
@@ -29,10 +30,9 @@ Run (needs a real terminal — an interactive SSH session, not a scripted one):
 
 import curses
 
-from assistant import ARM_JOINTS, robot_move_arm, _ensure_arm  # reuse the real arm code
+from assistant import ARM_JOINTS, ARM_CENTER_ANGLES, robot_move_arm, _ensure_arm  # reuse the real arm code
 
 STEP = 5.0
-START_ANGLE = 90.0
 
 
 def run(stdscr):
@@ -50,7 +50,7 @@ def run(stdscr):
         stdscr.getch()
         return
 
-    angles = {j: START_ANGLE for j in ARM_JOINTS}
+    angles = {j: ARM_CENTER_ANGLES[j] for j in ARM_JOINTS}
     for j in ARM_JOINTS:
         robot_move_arm(j, angles[j])
 
@@ -59,11 +59,12 @@ def run(stdscr):
         joint = ARM_JOINTS[idx]
         stdscr.clear()
         stdscr.addstr(0, 0, f"Joint {idx + 1}/{len(ARM_JOINTS)}: {joint}")
-        stdscr.addstr(1, 0, f"Angle: {angles[joint]:.0f} deg")
+        stdscr.addstr(1, 0, f"Angle: {angles[joint]:.0f} deg  (center: {ARM_CENTER_ANGLES[joint]:.0f})")
         stdscr.addstr(3, 0, "<-  / ->  nudge angle (-5 / +5 deg)")
         stdscr.addstr(4, 0, "Enter     next joint")
         stdscr.addstr(5, 0, "b         previous joint")
-        stdscr.addstr(6, 0, "q         quit")
+        stdscr.addstr(6, 0, "c         recenter this joint")
+        stdscr.addstr(7, 0, "q         quit")
         stdscr.refresh()
 
         key = stdscr.getch()
@@ -77,6 +78,9 @@ def run(stdscr):
             idx += 1
         elif key in (ord("b"), ord("B")):
             idx -= 1
+        elif key in (ord("c"), ord("C")):
+            angles[joint] = ARM_CENTER_ANGLES[joint]
+            robot_move_arm(joint, angles[joint])
         elif key in (ord("q"), ord("Q")):
             break
 

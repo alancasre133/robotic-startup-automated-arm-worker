@@ -20,6 +20,7 @@ Controls:
     LEFT / RIGHT   nudge the current joint's angle by 5 degrees
     Enter          go to the next joint
     b              go back to the previous joint
+    c              recenter the current joint (back to its center angle)
     SPACE          capture the current full pose as the next step
 
   WHEEL mode:
@@ -45,10 +46,9 @@ import os
 import sys
 from time import sleep
 
-from assistant import ARM_JOINTS, robot_move_arm, robot_drive, _ensure_arm, _ensure_motors
+from assistant import ARM_JOINTS, ARM_CENTER_ANGLES, robot_move_arm, robot_drive, _ensure_arm, _ensure_motors
 
 STEP = 5.0
-START_ANGLE = 90.0
 DRIVE_SECS = 1.0
 STEP_PAUSE = 0.8  # seconds to wait between arm poses during playback, for the servos to get there
 
@@ -75,7 +75,7 @@ def _record(stdscr, name: str):
         stdscr.refresh()
         stdscr.getch()
 
-    angles = {j: START_ANGLE for j in ARM_JOINTS}
+    angles = {j: ARM_CENTER_ANGLES[j] for j in ARM_JOINTS}
     for j in ARM_JOINTS:
         robot_move_arm(j, angles[j])
     _ensure_motors()
@@ -95,7 +95,8 @@ def _record(stdscr, name: str):
             stdscr.addstr(6, 0, "<-  / ->  nudge angle (-5 / +5 deg)")
             stdscr.addstr(7, 0, "Enter     next joint")
             stdscr.addstr(8, 0, "b         previous joint")
-            stdscr.addstr(9, 0, "SPACE     capture this pose as the next step")
+            stdscr.addstr(9, 0, "c         recenter this joint")
+            stdscr.addstr(10, 0, "SPACE     capture this pose as the next step")
         else:
             stdscr.addstr(3, 0, "UP / DOWN     drive forward / backward 1s")
             stdscr.addstr(4, 0, "LEFT / RIGHT  turn left / right 1s")
@@ -127,6 +128,9 @@ def _record(stdscr, name: str):
                 idx += 1
             elif key in (ord("b"), ord("B")):
                 idx -= 1
+            elif key in (ord("c"), ord("C")):
+                angles[joint] = ARM_CENTER_ANGLES[joint]
+                robot_move_arm(joint, angles[joint])
             elif key == ord(" "):
                 steps.append({"type": "arm", "pose": dict(angles)})
         else:  # wheel mode
