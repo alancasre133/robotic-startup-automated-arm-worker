@@ -339,6 +339,17 @@ def gripper(state: str) -> str:
     return f"Gripper {state}."
 
 
+def center_arm() -> str:
+    """Move every joint to its centre angle — the same known starting position
+    arm_jog_test.py uses. Done first so the arm begins from a predictable place
+    (and so the later smooth moves interpolate from a known point instead of
+    jumping on their first command). Not smoothed: the very first move has no
+    prior angle to glide from."""
+    for joint in ARM_JOINTS:
+        robot_move_arm(joint, ARM_CENTER_ANGLES[joint])
+    return "Arm centred."
+
+
 # ---------------------------------------------------------------------------
 # Sensing — HC-SR04 ultrasonic (forward distance)
 # ---------------------------------------------------------------------------
@@ -455,6 +466,7 @@ def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
     arm_pose / gripper (see the grab strategy in SYSTEM).
     """
     speak(f"Okay, looking for a {color} object.")
+    center_arm()            # start from the known centre (same as arm_jog_test.py)
     arm_pose("ready")
     gripper("open")
     have_cam = _ensure_camera() is not None
