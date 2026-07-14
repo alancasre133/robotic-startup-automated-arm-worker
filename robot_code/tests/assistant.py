@@ -1401,24 +1401,55 @@ def _piper_voices() -> list[str]:
     return sorted(n for n in names if n != "voice")   # voice.onnx = the default
 
 
-# --- Kokoro: high-quality neural TTS, called as a local HTTP server ---------
-# onnxruntime has no 32-bit ARM build, so rather than fight it on the Pi 3 we
-# talk to a Kokoro server (kokoro-fastapi, OpenAI-compatible /v1/audio/speech).
-# Run that server wherever it's fast -- your Mac -- and point the Pi at it with:
-#   export KOKORO_URL=http://<mac-tailscale-name>:8880/v1/audio/speech
-# When it's unreachable, speak() just falls back to Piper, so nothing breaks
-# offline. A voice named like af_heart / am_michael routes here automatically.
+# --- Kokoro: high-quality neural TTS, run in-process (no server) ------------
+# Runs as a plain Python library right here, the same way _say_piper shells out
+# to the piper binary -- no server, fully offline. Needs `kokoro-onnx` +
+# `soundfile` and the two model files in ~/kokoro/ (setup instructions in the
+# README). On the 32-bit Pi 3 you also need a community onnxruntime armhf wheel;
+# if any of that is missing, speak() just falls back to Piper. A voice named
+# like af_heart / am_michael routes here automatically.
+# (KOKORO_URL is an optional escape hatch: set it to an OpenAI-compatible
+#  /v1/audio/speech endpoint to offload synthesis to another machine instead.)
 KOKORO_URL = os.environ.get("KOKORO_URL", "")
+KOKORO_DIR = os.path.expanduser("~/kokoro")
+KOKORO_MODEL = os.path.join(KOKORO_DIR, "kokoro-v1.0.int8.onnx")
+KOKORO_VOICES_BIN = os.path.join(KOKORO_DIR, "voices-v1.0.bin")
 KOKORO_VOICES = [
     "af_heart", "af_bella", "af_nicole", "af_sarah", "af_sky",
     "am_michael", "am_adam", "am_fenrir", "am_puck",
     "bf_emma", "bf_isabella", "bm_george", "bm_fable",
 ]
+_kokoro = None                  # lazy-loaded engine
+_kokoro_unavailable = False
+
+
+def _kokoro_available() -> bool:
+    """True if we can speak Kokoro locally (model files present) or remotely."""
+    return bool(KOKORO_URL) or (
+        os.path.exists(KOKORO_MODEL) and os.path.exists(KOKORO_VOICES_BIN))
 
 
 def _kokoro_voices() -> list[str]:
-    """Kokoro voices, but only when a server is configured to speak them."""
-    return KOKORO_VOICES if KOKORO_URL else []
+    """Kokoro voices, but only when we can actually speak them."""
+    return KOKORO_VOICES if _kokoro_available() else []
+
+
+def _kokoro_engine():
+    """Load the in-process Kokoro model once (like the camera/arm lazy-init)."""
+    global _kokoro, _kokoro_unavailable
+    if _kokoro is not None or _kokoro_unavailable:
+        return _kokoro
+    if not (os.path.exists(KOKORO_MODEL) and os.path.exists(KOKORO_VOICES_BIN)):
+        _kokoro_unavailable = True
+        return None
+    try:
+        from kokoro_onnx import Kokoro
+        _kokoro = Kokoro(KOKORO_MODEL, KOKORO_VOICES_BIN)
+    except Exception as exc:
+        print(f"[kokoro unavailable: {exc}] — using Piper instead")
+        _kokoro_unavailable = True
+        return None
+    return _kokoro
 
 
 def list_voices() -> str:
@@ -1521,34 +1552,54 @@ def _play_wav(wav: str) -> None:
 
 
 def _say_kokoro(text: str) -> bool:
-    """Speak via a Kokoro server (OpenAI-compatible endpoint). False if it
-    isn't configured/reachable so the caller can fall back to Piper."""
-    if not KOKORO_URL:
-        return False
-    import json as _json
-    import urllib.request as _url
+    """Speak with Kokoro. Prefers the in-process model (no server); if KOKORO_URL
+    is set instead, offloads to that endpoint. False if neither is available so
+    the caller can fall back to Piper."""
     voice = _voice if _voice in KOKORO_VOICES else "af_heart"
-    body = _json.dumps({
-        "model": "kokoro", "voice": voice,
-        "input": text, "response_format": "wav",
-    }).encode()
-    wav = None
-    try:
-        req = _url.Request(KOKORO_URL, data=body,
-                           headers={"Content-Type": "application/json"})
-        with _url.urlopen(req, timeout=15) as resp:
-            audio = resp.read()
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            wav = f.name
-            f.write(audio)
-        _play_wav(wav)
-        return True
-    except Exception:
-        return False        # unreachable / server down -> fall back to Piper
-    finally:
-        if wav:
-            try: os.remove(wav)
-            except OSError: pass
+
+    # In-process (default, no server) --------------------------------------
+    eng = _kokoro_engine()
+    if eng is not None:
+        wav = None
+        try:
+            import soundfile as sf
+            samples, sr = eng.create(text, voice=voice, speed=1.0, lang="en-us")
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                wav = f.name
+            sf.write(wav, samples, sr)
+            _play_wav(wav)
+            return True
+        except Exception as exc:
+            print(f"[kokoro error: {exc}] — using Piper instead")
+        finally:
+            if wav:
+                try: os.remove(wav)
+                except OSError: pass
+
+    # Optional remote endpoint ---------------------------------------------
+    if KOKORO_URL:
+        import json as _json
+        import urllib.request as _url
+        body = _json.dumps({"model": "kokoro", "voice": voice,
+                            "input": text, "response_format": "wav"}).encode()
+        wav = None
+        try:
+            req = _url.Request(KOKORO_URL, data=body,
+                               headers={"Content-Type": "application/json"})
+            with _url.urlopen(req, timeout=15) as resp:
+                audio = resp.read()
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                wav = f.name
+                f.write(audio)
+            _play_wav(wav)
+            return True
+        except Exception:
+            return False
+        finally:
+            if wav:
+                try: os.remove(wav)
+                except OSError: pass
+    return False
 
 
 def _say_piper(text: str) -> bool:
