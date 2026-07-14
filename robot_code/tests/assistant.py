@@ -480,10 +480,35 @@ def best_distance(color: str = "red"):
     return -1.0, "none"
 
 
+GRAB_ATTEMPTS = 3           # how many times to try before giving up
+VERIFY_AREA_RATIO = 0.5     # after lift: blob still >= this fraction of its
+                            # pre-grab size -> it's still on the table (missed)
+
+
+def _verify_grab(color: str, pre_area: float) -> bool:
+    """After the lift, did we actually take the object off the table?
+
+    We can't just ask "do I still see the colour?" — a grabbed object can dangle
+    in front of the camera. Instead compare SIZE: right before the grab the
+    object filled `pre_area` of the frame at point-blank range. If we still see
+    a comparably sized blob, it's sitting where it was and the grab missed. If
+    it's gone or much smaller, it left the table — success. No camera (or no
+    pre-grab sighting) -> assume success, same trust level as the old code.
+    """
+    if _ensure_camera() is None or pre_area <= 0:
+        return True
+    r = look_for_object(color)
+    if not r.get("seen"):
+        return True
+    return r["area_frac"] < pre_area * VERIFY_AREA_RATIO
+
+
 def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
     """Find a coloured object with the camera, line up on it, approach with the
-    ultrasonic, then grab. Degrades gracefully: no camera -> drive straight
-    forward and grab whatever's ahead; no distance sensor -> a single blind grab.
+    ultrasonic, then grab — and CHECK the grab with the camera, retrying up to
+    GRAB_ATTEMPTS times if the object is still on the table. Degrades
+    gracefully: no camera -> drive straight forward, grab whatever's ahead, and
+    trust it; no distance sensor -> a single blind grab.
 
     This is the offline brain's version; the Claude brain does the same thing but
     reasons between steps, using look_for_object / distance_ahead / drive /
@@ -496,46 +521,60 @@ def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
     have_cam = _ensure_camera() is not None
 
     try:
-        for _ in range(max_steps):
-            # 1. See it and centre it (if the camera is available).
-            if have_cam:
-                r = look_for_object(color)
-                if not r.get("seen"):
-                    speak("I don't see it, turning to look.")
-                    robot_drive("right", 0.3)      # sweep to search
-                    continue
-                off = r["offset"]
-                if off < -CENTER_DEADZONE:
-                    speak("Turning left toward it.")
-                    robot_drive("left", 0.2)
-                    continue
-                if off > CENTER_DEADZONE:
-                    speak("Turning right toward it.")
-                    robot_drive("right", 0.2)
-                    continue
+        for attempt in range(1, GRAB_ATTEMPTS + 1):
+            pre_area = 0.0      # object's apparent size just before the grab
+            for _ in range(max_steps):
+                # 1. See it and centre it (if the camera is available).
+                if have_cam:
+                    r = look_for_object(color)
+                    if not r.get("seen"):
+                        speak("I don't see it, turning to look.")
+                        robot_drive("right", 0.3)      # sweep to search
+                        continue
+                    pre_area = r["area_frac"]
+                    off = r["offset"]
+                    if off < -CENTER_DEADZONE:
+                        speak("Turning left toward it.")
+                        robot_drive("left", 0.2)
+                        continue
+                    if off > CENTER_DEADZONE:
+                        speak("Turning right toward it.")
+                        robot_drive("right", 0.2)
+                        continue
 
-            # 2. Lined up (or no camera) — approach. Prefer the ultrasonic; if it
-            #    can't see the object, fall back to the LEARNED camera estimate.
-            d, source = best_distance(color)
-            if d < 0:
-                speak("I can't judge the distance, doing a blind grab.")
-                break
-            if d <= ARM_REACH_CM:
-                # In reach. We don't back off when very close: Motor A can't
-                # reverse right now (loose A-1A wire — MOTOR_A_A1A_STUCK), so
-                # "backward" would pivot and lose the object. Grab from here.
-                speak("In reach.")
-                break
-            via = "" if source == "ultrasonic" else " by camera"
-            speak(f"{d:.0f} centimeters{via}, moving closer.")
-            robot_drive("forward", 0.4)            # short burst so we don't overshoot
-        else:
-            return "I couldn't line up on it."
+                # 2. Lined up (or no camera) — approach. Prefer the ultrasonic;
+                #    if it can't see the object, use the LEARNED camera estimate.
+                d, source = best_distance(color)
+                if d < 0:
+                    speak("I can't judge the distance, doing a blind grab.")
+                    break
+                if d <= ARM_REACH_CM:
+                    # In reach. We don't back off when very close: Motor A can't
+                    # reverse right now (loose A-1A wire — MOTOR_A_A1A_STUCK), so
+                    # "backward" would pivot and lose the object. Grab from here.
+                    speak("In reach.")
+                    break
+                via = "" if source == "ultrasonic" else " by camera"
+                speak(f"{d:.0f} centimeters{via}, moving closer.")
+                robot_drive("forward", 0.4)        # short burst, don't overshoot
+            else:
+                return "I couldn't line up on it."
 
-        arm_pose("reach")
-        gripper("close")
-        arm_pose("lift")
-        return "Got it."
+            # 3. Grab.
+            arm_pose("reach")
+            gripper("close")
+            arm_pose("lift")
+
+            # 4. Verify — look where the object was. Still there = we missed.
+            if _verify_grab(color, pre_area):
+                return "Got it." if attempt == 1 else f"Got it on try {attempt}."
+            if attempt < GRAB_ATTEMPTS:
+                speak("I missed it. Trying again.")
+                gripper("open")            # release whatever we pinched
+                arm_pose("ready")          # clear the camera's view + reset
+            else:
+                arm_pose("ready")
+        return "I tried %d times but couldn't grab it." % GRAB_ATTEMPTS
     finally:
         _close_camera()    # free the camera for the stream service / next grab
 
