@@ -436,15 +436,26 @@ def _close_camera():
         _camera = None
 
 
-def look_for_object(color: str = "red") -> dict:
-    """Ask the camera where the largest `color` object is. See perception.find_object."""
+def look_for_object(color: str = "red", frames: int = 4) -> dict:
+    """Ask the camera where the largest `color` object is. See perception.find_object.
+
+    Samples several frames and returns the BEST (largest-area) hit. The detector
+    drops a frame now and then even when the object is plainly there — a single
+    "not seen" would make the grab loop sweep away and lose its lock. Checking a
+    few frames and keeping the best one rides over those one-frame dropouts.
+    """
     cam = _ensure_camera()
     if cam is None or _perception is None:
         return {"seen": False, "error": "camera unavailable"}
-    try:
-        return _perception.find_object(cam, color)
-    except Exception as exc:
-        return {"seen": False, "error": str(exc)}
+    best = {"seen": False}
+    for _ in range(max(1, frames)):
+        try:
+            r = _perception.find_object(cam, color)
+        except Exception as exc:
+            return {"seen": False, "error": str(exc)}
+        if r.get("seen") and r.get("area_frac", 0) >= best.get("area_frac", -1):
+            best = r
+    return best
 
 
 def best_distance(color: str = "red"):
