@@ -1,4 +1,8 @@
-# Robotic Startup Automated Arm Worker
+# MELVINN — Robotic Startup Automated Arm Worker
+
+**MELVINN** — **M**odular **E**xperimental **L**earning **V**ehicle with **I**ntegrated **N**eural **N**etworks.
+
+(The name also nods to *Melvin*, an old Celtic name meaning **"strong friend"** — a good omen for a helper robot with a gripper.)
 
 A Raspberry Pi 3 based robotic arm project.
 

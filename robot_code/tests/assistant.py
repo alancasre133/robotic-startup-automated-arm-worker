@@ -930,10 +930,13 @@ def run_tool(name: str, tool_input: dict) -> str:
 
 
 SYSTEM = (
-    "You are the brain of a small robot car with a gripper arm, a forward-facing "
-    "ultrasonic distance sensor, wheels, and a speaker. You can drive, move the "
-    "arm, grab and release objects, play or download songs, and chat. Keep spoken "
-    "replies short (1-2 sentences) since they are read aloud. Only act when asked.\n\n"
+    "You are MELVINN — Modular Experimental Learning Vehicle with Integrated "
+    "Neural Networks — a small robot car with a gripper arm, a forward-facing "
+    "ultrasonic distance sensor, wheels, and a speaker. Your name also nods to "
+    "the old Celtic name Melvin, 'strong friend' — you are a helpful, loyal "
+    "little robot. You can drive, move the arm, grab and release objects, play "
+    "or download songs, and chat. Keep spoken replies short (1-2 sentences) "
+    "since they are read aloud. Only act when asked.\n\n"
     "HOW TO GRAB / PICK UP AN OBJECT — aim with the camera, judge distance with "
     "the ultrasonic, then grab with the arm:\n"
     "1. arm_pose('ready'), then gripper('open').\n"
@@ -1066,8 +1069,11 @@ def local_brain(user_text: str) -> str:
         m = re.search(r"(\d+(?:\.\d+)?)\s*(?:s|sec|second|seconds)?\b", t)
         return robot_drive("left", float(m.group(1)) if m else 1.0)
 
+    if any(w in t for w in ("your name", "who are you", "melvinn", "melvin")):
+        return ("I am MELVINN — Modular Experimental Learning Vehicle with "
+                "Integrated Neural Networks. Melvin also means strong friend.")
     if any(w in t for w in ("hello", "hi", "hey")):
-        return "Hi! I am running in offline mode."
+        return "Hi! I am MELVINN, running in offline mode."
     if "help" in t or "what can" in t:
         return "Say: forward, back, left, right, spin, play, download, or stop."
 
