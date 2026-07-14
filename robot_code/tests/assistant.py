@@ -302,15 +302,16 @@ def robot_move_arm(joint: str, angle: float, smooth: bool = False) -> str:
 # then copy the numbers in. Wrong angles can make the arm hit itself or the
 # chassis: move slowly the first time and keep a hand near the power.
 ARM_POSES = {
-    # base shoulder elbow wrist wrist_rotate  (gripper handled separately below)
-    "home":  {"base": 90, "shoulder": 90, "elbow": 90, "wrist": 90, "wrist_rotate": 90},
-    "ready": {"base": 90, "shoulder": 60, "elbow": 90, "wrist": 90, "wrist_rotate": 90},
-    "reach": {"base": 90, "shoulder": 40, "elbow": 120, "wrist": 100, "wrist_rotate": 90},
-    "lift":  {"base": 90, "shoulder": 90, "elbow": 90, "wrist": 90, "wrist_rotate": 90},
-    "drop":  {"base": 90, "shoulder": 40, "elbow": 120, "wrist": 100, "wrist_rotate": 90},
+    # Calibrated on-device with arm_jog_test.py (gripper handled separately below).
+    # base shoulder elbow wrist wrist_rotate
+    "home":  {"base": 90, "shoulder": 180, "elbow": 45, "wrist": 90, "wrist_rotate": 90},
+    "ready": {"base": 90, "shoulder": 180, "elbow": 45, "wrist": 90, "wrist_rotate": 90},
+    "reach": {"base": 90, "shoulder": 65,  "elbow": 0,  "wrist": 50, "wrist_rotate": 180},
+    "lift":  {"base": 90, "shoulder": 140, "elbow": 20, "wrist": 95, "wrist_rotate": 180},
+    "drop":  {"base": 90, "shoulder": 140, "elbow": 20, "wrist": 95, "wrist_rotate": 180},
 }
-GRIPPER_OPEN = 120.0    # calibrate: angle where the gripper is fully open
-GRIPPER_CLOSE = 55.0    # calibrate: angle where it grips an object
+GRIPPER_OPEN = 15.0     # calibrated: open the hand (also the release angle)
+GRIPPER_CLOSE = 150.0   # calibrated: grip an object
 
 ARM_REACH_CM = 15.0     # how far ahead the arm can reach (calibrate for your arm)
 STOP_CM = 5.0           # never drive forward when something is this close
