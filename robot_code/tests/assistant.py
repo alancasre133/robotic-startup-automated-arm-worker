@@ -1064,6 +1064,23 @@ TOOLS = [
             "required": ["sound"],
         },
     },
+    {
+        "name": "set_effect",
+        "description": "Layer a character sound effect over MELVINN's current "
+                       "voice (works on any voice). Use for 'sound like a "
+                       "robot/monster/ghost', 'add an underwater effect', "
+                       "'talk like a Dalek', or 'turn off the effect' (none).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "effect": {"type": "string",
+                           "enum": ["none", "robot", "dalek", "chipmunk",
+                                    "giant", "monster", "ghost", "underwater",
+                                    "telephone", "cave", "space", "drunk"]},
+            },
+            "required": ["effect"],
+        },
+    },
 ]
 
 
@@ -1108,6 +1125,8 @@ def run_tool(name: str, tool_input: dict) -> str:
         return list_voices()
     if name == "play_sound":
         return play_sound(tool_input["sound"])
+    if name == "set_effect":
+        return set_effect(tool_input["effect"])
     return f"Unknown tool: {name}"
 
 
@@ -1122,8 +1141,10 @@ SYSTEM = (
     "You can speak in different voices: call list_voices to see what's "
     "installed, set_voice to switch. If asked what voices you have, call "
     "list_voices and read it out. You can also make fun noises with "
-    "play_sound (bark, woof, growl, howl, meow) — including silly voices "
-    "puppy, growl, alien, and giant.\n\n"
+    "play_sound (bark, woof, growl, howl, meow), and layer a character "
+    "sound effect over any voice with set_effect (robot, dalek, monster, "
+    "ghost, underwater, telephone, cave, space, giant, chipmunk, drunk; "
+    "none to clear).\n\n"
     "TO GRAB / PICK UP AN OBJECT: call grab(color). To pick up ALL objects of "
     "a colour: call grab_all(color). Both run in the background and the user "
     "can say 'stop' to interrupt — just acknowledge and let them run; don't "
@@ -1270,6 +1291,21 @@ def local_brain(user_text: str) -> str:
                 return set_voice(v)
         return list_voices()
 
+    # SoX character effects layered on any voice ("add a monster effect")
+    if "effect" in t:
+        if any(w in t for w in ("off", "no ", "clear", "remove", "normal", "stop")):
+            return set_effect("none")
+        for e in EFFECTS:
+            if e in t:
+                return set_effect(e)
+        return ("Which effect? I have: " +
+                ", ".join(n for n in EFFECTS if n != "none") + ".")
+    # "sound like a dalek / robot / ghost..." also picks an effect
+    if "sound like" in t:
+        for e in EFFECTS:
+            if e != "none" and e in t:
+                return set_effect(e)
+
     # animal / creature noises (fun) — check before generic handling
     if "dog" in t or "sound like" in t:
         return play_sound("bark")
@@ -1375,7 +1411,9 @@ def list_voices() -> str:
         parts.append("Natural voices: " + ", ".join(natural) + ".")
     parts.append("Classic robot voices: " +
                  ", ".join(v for v in VOICES if v != "melvinn") + ".")
-    parts.append("Say for example: use your joe voice.")
+    parts.append("Effects you can layer on any voice: " +
+                 ", ".join(n for n in EFFECTS if n != "none") + ".")
+    parts.append("Say for example: use your joe voice, or add a monster effect.")
     return " ".join(parts)
 
 
@@ -1388,6 +1426,74 @@ def set_voice(name: str) -> str:
     _voice = name
     speak(f"This is my {name} voice.")     # demo it immediately
     return f"Voice set to {name}."
+
+
+# ---------------------------------------------------------------------------
+# Voice EFFECTS — a SoX post-processing layer on top of ANY voice.
+# ---------------------------------------------------------------------------
+# The research payoff: instead of only espeak's pitch/speed, run the finished
+# audio (from piper OR espeak) through SoX effect chains. This keeps piper's
+# natural, intelligible voice but lets it sound like a robot, a monster, a
+# ghost, a Dalek, etc. SoX is tiny and fast on a Pi 3. Effects STACK on top of
+# whatever voice is selected, so "amy + monster" or "joe + telephone" work.
+# Each value is a raw SoX effect chain (see `man sox`). Needs the `sox` package.
+EFFECTS = {
+    "none":       "",
+    "robot":      "overdrive 10 echo 0.6 0.7 8 0.6",            # buzzy metallic
+    "dalek":      "overdrive 22 22 echo 0.8 0.88 6 0.5 pitch -120",  # Dr Who Dalek
+    "chipmunk":   "pitch 550",                                  # fast squeaky
+    "giant":      "pitch -450 speed 0.92 reverb 25",           # huge and slow
+    "monster":    "pitch -320 overdrive 14 reverb 45",         # deep growly
+    "ghost":      "pitch -200 reverb 85 chorus 0.7 0.9 55 0.4 0.25 2 -t",
+    "underwater": "lowpass 500 tremolo 8 45",                   # gurgly muffled
+    "telephone":  "sinc 300-3400 overdrive 6",                  # tinny phone
+    "cave":       "reverb 92 100 100 pitch -80",               # big echoey cave
+    "space":      "chorus 0.7 0.9 55 0.4 0.25 2 -t reverb 60 pitch -60",
+    "drunk":      "speed 0.9 chorus 0.6 0.9 50 0.4 0.25 2 -t",  # wobbly
+}
+_effect = os.environ.get("MELVINN_EFFECT", "none")
+
+
+def set_effect(name: str) -> str:
+    """Layer a SoX character effect over whatever voice is selected."""
+    global _effect
+    name = name.strip().lower()
+    if name in ("off", "clear", "normal", "plain"):
+        name = "none"
+    if name not in EFFECTS:
+        return (f"I don't have a '{name}' effect. I have: "
+                f"{', '.join(n for n in EFFECTS if n != 'none')}.")
+    if shutil.which("sox") is None and name != "none":
+        return "I need the sox tool for effects. Run: sudo apt install -y sox"
+    _effect = name
+    if name == "none":
+        speak("Effect off.")
+        return "Effect cleared."
+    speak(f"How do I sound with the {name} effect?")   # demo it
+    return f"Effect set to {name}."
+
+
+def _play_wav(wav: str) -> None:
+    """Play a wav, first running it through the active SoX effect if one is set."""
+    chain = EFFECTS.get(_effect, "")
+    if chain and shutil.which("sox"):
+        out = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                out = f.name
+            # sox in.wav out.wav <effect chain...>
+            subprocess.run(["sox", wav, out] + chain.split(),
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                           check=True)
+            subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE, out])
+            return
+        except (OSError, subprocess.SubprocessError):
+            pass          # effect failed -> fall through to the dry wav
+        finally:
+            if out:
+                try: os.remove(out)
+                except OSError: pass
+    subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE, wav])
 
 
 def _say_piper(text: str) -> bool:
@@ -1405,7 +1511,7 @@ def _say_piper(text: str) -> bool:
         subprocess.run(["piper", "--model", model, "--output_file", wav],
                        input=text.encode(), stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL, check=True)
-        subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE, wav])
+        _play_wav(wav)
         return True
     except (OSError, subprocess.SubprocessError):
         return False
@@ -1417,16 +1523,22 @@ def _say_piper(text: str) -> bool:
 
 def _say_espeak(text: str) -> None:
     voice, pitch, speed = VOICES.get(_voice, VOICES["melvinn"])
+    wav = None
     try:
-        tts = subprocess.Popen(
-            ["espeak-ng", "-v", voice, "-p", str(pitch), "-s", str(speed),
-             text, "--stdout"],
-            stdout=subprocess.PIPE)
-        subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE], stdin=tts.stdout)
-        tts.stdout.close()
-        tts.wait()
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            wav = f.name
+        # Write to a wav so the SoX effect layer can process it (same path as
+        # piper). -w = write to file instead of playing directly.
+        subprocess.run(["espeak-ng", "-v", voice, "-p", str(pitch),
+                        "-s", str(speed), "-w", wav, text],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        _play_wav(wav)
     except FileNotFoundError:
         pass
+    finally:
+        if wav:
+            try: os.remove(wav)
+            except OSError: pass
 
 
 def speak(text: str) -> None:

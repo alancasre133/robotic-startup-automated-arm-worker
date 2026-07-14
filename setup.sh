@@ -68,11 +68,13 @@ echo "    Done (a reboot is required for the camera to appear)."
 
 echo
 echo
-echo "==> Installing audio tools (espeak-ng, aplay, mpg123)..."
+echo "==> Installing audio tools (espeak-ng, aplay, mpg123, sox)..."
 # arecord (from alsa-utils) is what assistant.py uses for mic input -- not
 # Python's sounddevice/PortAudio, which couldn't negotiate the USB
 # speakerphone's sample rate on the raw ALSA default device.
-apt_install espeak-ng alsa-utils mpg123
+# sox powers MELVINN's voice EFFECTS (robot/monster/ghost/etc.) -- it
+# post-processes the TTS audio; without it, effects silently no-op.
+apt_install espeak-ng alsa-utils mpg123 sox
 
 echo
 echo "==> Setting USB speakerphone volume..."
