@@ -93,6 +93,79 @@ else
 fi
 
 echo
+echo "==> Installing Piper (natural neural voice for MELVINN)..."
+# espeak-ng (above) is the always-there fallback, but it sounds robotic.
+# Piper is a small neural TTS that sounds human; assistant.py's speak()
+# prefers it automatically whenever ~/piper/voice.onnx exists. This section
+# installs the piper binary and downloads a set of voices to ~/piper/. Extra
+# voices land as ~/piper/<name>.onnx and show up in "list_voices" with no code
+# change. Safe to re-run: anything already downloaded is skipped.
+PIPER_DIR=~/piper
+mkdir -p "$PIPER_DIR"
+
+if ! command -v piper >/dev/null 2>&1; then
+    # Pick the prebuilt binary matching this Pi's architecture.
+    case "$(uname -m)" in
+        aarch64)         PIPER_ASSET=piper_linux_aarch64.tar.gz ;;
+        armv7l|armv6l)   PIPER_ASSET=piper_linux_armv7l.tar.gz ;;
+        x86_64)          PIPER_ASSET=piper_linux_x86_64.tar.gz ;;
+        *)               PIPER_ASSET="" ;;
+    esac
+    if [ -z "$PIPER_ASSET" ]; then
+        echo "    Unknown architecture $(uname -m) -- skipping piper; espeak-ng stays as the voice."
+        FAILURES+=("piper (no prebuilt binary for $(uname -m))")
+    else
+        PIPER_URL="https://github.com/rhasspy/piper/releases/download/2023.11.14-2/$PIPER_ASSET"
+        if wget -q --show-progress -O /tmp/piper.tar.gz "$PIPER_URL" \
+            && tar xzf /tmp/piper.tar.gz -C "$PIPER_DIR"; then
+            sudo ln -sf "$PIPER_DIR/piper/piper" /usr/local/bin/piper
+            echo "    Piper installed ($PIPER_ASSET)."
+        else
+            echo "    !! Piper download/extract failed -- espeak-ng stays as the voice."
+            FAILURES+=("piper binary download ($PIPER_URL)")
+        fi
+        rm -f /tmp/piper.tar.gz
+    fi
+else
+    echo "    piper already installed -- skipping binary."
+fi
+
+# Download voices. First column is the local name (~/piper/<name>.onnx), second
+# is the path under the piper-voices repo. "voice" is MELVINN's default voice.
+if command -v piper >/dev/null 2>&1; then
+    echo "==> Downloading MELVINN's voices..."
+    PIPER_VOICE_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0"
+    PIPER_VOICES=(
+        "voice|en/en_US/amy/low/en_US-amy-low"          # default: warm, fast
+        "joe|en/en_US/joe/medium/en_US-joe-medium"      # deep American male
+        "danny|en/en_US/danny/low/en_US-danny-low"      # casual young male
+        "kathleen|en/en_US/kathleen/low/en_US-kathleen-low"
+        "ryan|en/en_US/ryan/low/en_US-ryan-low"
+        "lessac|en/en_US/lessac/low/en_US-lessac-low"   # narrator-style female
+        "alan|en/en_GB/alan/medium/en_GB-alan-medium"   # British male
+        "northern|en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium"
+        "spanish|es/es_MX/ald/medium/es_MX-ald-medium"  # Mexican Spanish male
+    )
+    for entry in "${PIPER_VOICES[@]}"; do
+        vname=${entry%%|*}
+        vpath=${entry#*|}
+        target="$PIPER_DIR/$vname.onnx"
+        if [ -f "$target" ]; then
+            echo "    $vname already present -- skipping."
+            continue
+        fi
+        if wget -q --show-progress -O "$target" "$PIPER_VOICE_BASE/$vpath.onnx" \
+            && wget -q -O "$target.json" "$PIPER_VOICE_BASE/$vpath.onnx.json"; then
+            echo "    Downloaded $vname."
+        else
+            echo "    !! Failed to download voice '$vname'."
+            rm -f "$target" "$target.json"
+            FAILURES+=("piper voice: $vname")
+        fi
+    done
+fi
+
+echo
 echo "==> Installing yt-dlp (song downloader)..."
 python3 -m pip install --break-system-packages yt-dlp 2>/dev/null || python3 -m pip install yt-dlp
 
