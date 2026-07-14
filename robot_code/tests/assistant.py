@@ -306,7 +306,7 @@ ARM_POSES = {
     # base shoulder elbow wrist wrist_rotate
     "home":  {"base": 90, "shoulder": 180, "elbow": 45, "wrist": 90, "wrist_rotate": 90},
     "ready": {"base": 90, "shoulder": 180, "elbow": 45, "wrist": 90, "wrist_rotate": 90},
-    "reach": {"base": 90, "shoulder": 65,  "elbow": 0,  "wrist": 50, "wrist_rotate": 180},
+    "reach": {"base": 90, "shoulder": 65,  "elbow": 90, "wrist": 50, "wrist_rotate": 180},
     "lift":  {"base": 90, "shoulder": 140, "elbow": 20, "wrist": 95, "wrist_rotate": 180},
     "drop":  {"base": 90, "shoulder": 140, "elbow": 20, "wrist": 95, "wrist_rotate": 180},
 }
