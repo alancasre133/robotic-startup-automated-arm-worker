@@ -313,7 +313,8 @@ ARM_POSES = {
 GRIPPER_OPEN = 15.0     # calibrated: open the hand (also the release angle)
 GRIPPER_CLOSE = 150.0   # calibrated: grip an object
 
-ARM_REACH_CM = 15.0     # how far ahead the arm can reach (calibrate for your arm)
+ARM_REACH_CM = 22.0     # trigger "in reach" at ~this distance — tuned to where the
+                        # object actually sits when the arm's reach pose lands on it
 STOP_CM = 5.0           # never drive forward when something is this close
 
 
@@ -364,6 +365,11 @@ _distance_unavailable = False
 def distance_ahead() -> float:
     """Distance in cm to the nearest object ahead. Returns -1 if no sensor.
 
+    Takes the MEDIAN of 3 quick reads. The HC-SR04 on software-timed pins is
+    jittery — a single read occasionally misses the echo and reports the full
+    range (a "spike" like 119 cm when the object is really at 18). The median of
+    three throws out one bad spike, giving a steady number for the grab loop.
+
     Lazy-inits the HC-SR04 on first call (like the motors/arm) so merely
     importing this module never touches the GPIO pins.
     """
@@ -379,10 +385,17 @@ def distance_ahead() -> float:
         except Exception:
             _distance_unavailable = True
             return -1.0
-    try:
-        return _distance_sensor.distance * 100.0    # metres -> cm
-    except Exception:
+    reads = []
+    for _ in range(3):
+        try:
+            reads.append(_distance_sensor.distance * 100.0)    # metres -> cm
+        except Exception:
+            pass
+        sleep(0.02)
+    if not reads:
         return -1.0
+    reads.sort()
+    return reads[len(reads) // 2]    # median
 
 
 # ---------------------------------------------------------------------------
