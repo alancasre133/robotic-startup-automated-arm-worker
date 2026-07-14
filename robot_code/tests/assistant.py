@@ -480,6 +480,58 @@ def best_distance(color: str = "red"):
     return -1.0, "none"
 
 
+# ---------------------------------------------------------------------------
+# Background actions — multitask + a voice kill-switch
+# ---------------------------------------------------------------------------
+# Long actions (a grab, a grab-everything loop) run in a worker thread so the
+# main loop KEEPS LISTENING. Saying "stop" sets _stop_event; the action checks
+# it between steps and bails out. One action at a time — the robot has one
+# body — so starting a second one while busy just tells you it's busy.
+_stop_event = threading.Event()
+_action_thread: "threading.Thread | None" = None
+_action_name = ""
+
+
+def action_running() -> bool:
+    return _action_thread is not None and _action_thread.is_alive()
+
+
+def stop_action() -> bool:
+    """Ask the running action to stop. Returns True if one was running."""
+    if action_running():
+        _stop_event.set()
+        return True
+    return False
+
+
+def _stopped() -> bool:
+    """For use INSIDE actions: has the user said stop?"""
+    return _stop_event.is_set()
+
+
+def start_action(name: str, fn) -> str:
+    """Run fn() in the background; speak its result when it finishes."""
+    global _action_thread, _action_name
+    if action_running():
+        return f"I'm already busy {_action_name}. Say stop first."
+    _stop_event.clear()
+    _action_name = name
+
+    def _worker():
+        global _action_thread
+        try:
+            result = fn()
+        except Exception as exc:
+            result = f"I hit a problem while {name}: {exc}"
+        finally:
+            _action_thread = None
+        speak(result if not _stop_event.is_set() else "Okay, stopped.")
+
+    _action_thread = threading.Thread(target=_worker, daemon=True)
+    _action_thread.start()
+    return f"Okay, {name}. Say stop if you want me to quit."
+
+
 GRAB_ATTEMPTS = 3           # how many times to try before giving up
 VERIFY_AREA_RATIO = 0.5     # after lift: blob still >= this fraction of its
                             # pre-grab size -> it's still on the table (missed)
@@ -524,6 +576,8 @@ def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
         for attempt in range(1, GRAB_ATTEMPTS + 1):
             pre_area = 0.0      # object's apparent size just before the grab
             for _ in range(max_steps):
+                if _stopped():
+                    return "Stopped."
                 # 1. See it and centre it (if the camera is available).
                 if have_cam:
                     r = look_for_object(color)
@@ -560,6 +614,9 @@ def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
             else:
                 return "I couldn't line up on it."
 
+            if _stopped():
+                return "Stopped."
+
             # 3. Grab.
             arm_pose("reach")
             gripper("close")
@@ -585,6 +642,50 @@ def release_sequence() -> str:
     gripper("open")
     arm_pose("home")
     return "Dropped it."
+
+
+def grab_all(color: str = "red", max_objects: int = 3) -> str:
+    """Task loop: keep finding, grabbing, and setting aside `color` objects
+    until none are left in view (or max_objects, or the user says stop).
+
+    Per object: grab it (grab_sequence verifies + retries on its own), pivot
+    left, drop it there, pivot back, look for the next one. If a sweep of the
+    room finds nothing, the job is done.
+    """
+    grabbed = 0
+    for _ in range(max_objects):
+        if _stopped():
+            break
+
+        # Is there (still) one out there? Sweep up to a full-ish circle.
+        found = False
+        for _ in range(8):
+            if _stopped():
+                break
+            if look_for_object(color).get("seen"):
+                found = True
+                break
+            robot_drive("right", 0.3)
+        _close_camera()
+        if not found or _stopped():
+            break
+
+        result = grab_sequence(color)
+        if _stopped():
+            break
+        if "Got it" not in result:
+            return (f"I picked up {grabbed} and then couldn't get the next "
+                    f"one: {result}")
+
+        grabbed += 1
+        speak(f"That's {grabbed}. Setting it down.")
+        robot_drive("left", 0.6)       # put it down out of the work area
+        release_sequence()
+        robot_drive("right", 0.6)      # face the work area again
+
+    if grabbed == 0:
+        return f"I don't see any {color} objects around."
+    return f"All done — I picked up {grabbed} {color} object{'s' if grabbed != 1 else ''}."
 
 
 # ---------------------------------------------------------------------------
@@ -897,6 +998,37 @@ TOOLS = [
         },
     },
     {
+        "name": "grab",
+        "description": "Find a coloured object, drive up to it, and pick it up "
+                       "with the arm — the full sequence, run in the background "
+                       "so the user can say 'stop' to interrupt. Returns "
+                       "immediately with an acknowledgement. Use this for any "
+                       "'grab / pick up the X' request instead of orchestrating "
+                       "drive/arm_pose/gripper yourself.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "color": {"type": "string",
+                          "enum": ["red", "green", "blue", "yellow"]},
+            },
+            "required": ["color"],
+        },
+    },
+    {
+        "name": "grab_all",
+        "description": "Task loop: pick up EVERY object of a colour, one after "
+                       "another, setting each aside, until none are left. Runs "
+                       "in the background; the user can say 'stop' any time.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "color": {"type": "string",
+                          "enum": ["red", "green", "blue", "yellow"]},
+            },
+            "required": ["color"],
+        },
+    },
+    {
         "name": "set_voice",
         "description": "Change MELVINN's speaking voice. Use when the user asks "
                        "for a different voice (e.g. 'talk in a deep voice', "
@@ -941,6 +1073,14 @@ def run_tool(name: str, tool_input: dict) -> str:
         return arm_pose(tool_input["name"])
     if name == "gripper":
         return gripper(tool_input["state"])
+    if name == "grab":
+        color = tool_input.get("color", "red")
+        return start_action(f"grabbing the {color} object",
+                            lambda: grab_sequence(color))
+    if name == "grab_all":
+        color = tool_input.get("color", "red")
+        return start_action(f"picking up all the {color} objects",
+                            lambda: grab_all(color))
     if name == "set_voice":
         return set_voice(tool_input["voice"])
     return f"Unknown tool: {name}"
@@ -957,8 +1097,12 @@ SYSTEM = (
     "You can speak in different voices (set_voice): melvinn (default), robot, "
     "deep, chipmunk, female, whisper, spanish. If asked what voices you have, "
     "list them.\n\n"
-    "HOW TO GRAB / PICK UP AN OBJECT — aim with the camera, judge distance with "
-    "the ultrasonic, then grab with the arm:\n"
+    "TO GRAB / PICK UP AN OBJECT: call grab(color). To pick up ALL objects of "
+    "a colour: call grab_all(color). Both run in the background and the user "
+    "can say 'stop' to interrupt — just acknowledge and let them run; don't "
+    "orchestrate the steps yourself unless the user asks for something custom.\n\n"
+    "MANUAL GRAB (only for custom requests) — aim with the camera, judge "
+    "distance with the ultrasonic, then grab with the arm:\n"
     "1. arm_pose('ready'), then gripper('open').\n"
     "2. look_for_object(color). If the camera is unavailable, skip aiming and just "
     "approach straight ahead. If the object isn't seen, drive('right', 0.3) to sweep "
@@ -1043,10 +1187,14 @@ def local_brain(user_text: str) -> str:
     if t.startswith("say "):
         return user_text.strip()[4:].strip()
 
-    # grab / pick up — camera-aim + ultrasonic approach + arm sequence
+    # grab / pick up — runs in the BACKGROUND so "stop" still works mid-grab
     if "grab" in t or "pick up" in t or "pick it up" in t:
         color = next((c for c in ("red", "green", "blue", "yellow") if c in t), "red")
-        return grab_sequence(color)
+        if "all" in t or "every" in t:
+            return start_action(f"picking up all the {color} objects",
+                                lambda: grab_all(color))
+        return start_action(f"grabbing the {color} object",
+                            lambda: grab_sequence(color))
     # put down / release
     if any(p in t for p in ("put down", "put it down", "drop", "release", "let go")):
         return release_sequence()
@@ -1111,8 +1259,15 @@ def local_brain(user_text: str) -> str:
 # Think — pick brain
 # ---------------------------------------------------------------------------
 def think(user_text: str, history: list) -> str:
-    if "stop" in user_text.lower() and "music" not in user_text.lower():
-        return robot_drive("stop")
+    t = user_text.lower()
+    if "stop" in t and "music" not in t:
+        was_busy = stop_action()        # interrupt any background action
+        robot_drive("stop")
+        return "Stopping." if was_busy else "Stopped."
+    if action_running():
+        # Busy multitasking guard: one body, one action. Chat still works
+        # offline-style, but no new motion until this one ends or is stopped.
+        return f"I'm busy {_action_name}. Say stop to interrupt me."
     if client is not None:
         try:
             return claude_brain(user_text, history)
