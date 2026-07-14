@@ -136,15 +136,39 @@ if command -v piper >/dev/null 2>&1; then
     echo "==> Downloading MELVINN's voices..."
     PIPER_VOICE_BASE="https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0"
     PIPER_VOICES=(
+        # --- default ---
         "voice|en/en_US/amy/low/en_US-amy-low"          # default: warm, fast
+        # --- American English ---
         "joe|en/en_US/joe/medium/en_US-joe-medium"      # deep American male
         "danny|en/en_US/danny/low/en_US-danny-low"      # casual young male
         "kathleen|en/en_US/kathleen/low/en_US-kathleen-low"
         "ryan|en/en_US/ryan/low/en_US-ryan-low"
         "lessac|en/en_US/lessac/low/en_US-lessac-low"   # narrator-style female
+        "hfc_female|en/en_US/hfc_female/medium/en_US-hfc_female-medium"
+        "hfc_male|en/en_US/hfc_male/medium/en_US-hfc_male-medium"
+        "kristin|en/en_US/kristin/medium/en_US-kristin-medium"
+        "libritts|en/en_US/libritts_r/medium/en_US-libritts_r-medium"  # expressive
+        "norman|en/en_US/norman/medium/en_US-norman-medium"
+        "ljspeech|en/en_US/ljspeech/medium/en_US-ljspeech-medium"      # classic TTS
+        "bryce|en/en_US/bryce/medium/en_US-bryce-medium"
+        "john|en/en_US/john/medium/en_US-john-medium"
+        # --- British / Scottish English ---
         "alan|en/en_GB/alan/medium/en_GB-alan-medium"   # British male
         "northern|en/en_GB/northern_english_male/medium/en_GB-northern_english_male-medium"
-        "spanish|es/es_MX/ald/medium/es_MX-ald-medium"  # Mexican Spanish male
+        "jenny|en/en_GB/jenny_dioco/medium/en_GB-jenny_dioco-medium"   # British female
+        "alba|en/en_GB/alba/medium/en_GB-alba-medium"   # Scottish female
+        "cori|en/en_GB/cori/high/en_GB-cori-high"        # British female, high quality
+        "semaine|en/en_GB/semaine/medium/en_GB-semaine-medium"
+        "aru|en/en_GB/aru/medium/en_GB-aru-medium"
+        # --- other languages (fun accents when reading English; real when spoken in-language) ---
+        "spanish|es/es_MX/ald/medium/es_MX-ald-medium"       # Mexican Spanish male
+        "castilian|es/es_ES/davefx/medium/es_ES-davefx-medium"  # Spain Spanish
+        "french|fr/fr_FR/siwis/medium/fr_FR-siwis-medium"
+        "german|de/de_DE/thorsten/medium/de_DE-thorsten-medium"
+        "italian|it/it_IT/riccardo/x_low/it_IT-riccardo-x_low"
+        "portuguese|pt/pt_BR/faber/medium/pt_BR-faber-medium"
+        "dutch|nl/nl_NL/mls/medium/nl_NL-mls-medium"
+        "swedish|sv/sv_SE/nst/medium/sv_SE-nst-medium"
     )
     for entry in "${PIPER_VOICES[@]}"; do
         vname=${entry%%|*}
