@@ -1032,16 +1032,23 @@ TOOLS = [
         "name": "set_voice",
         "description": "Change MELVINN's speaking voice. Use when the user asks "
                        "for a different voice (e.g. 'talk in a deep voice', "
-                       "'use your robot voice', 'habla en español').",
+                       "'use your joe voice', 'habla en español'). Valid names "
+                       "come from list_voices — if unsure, call that first.",
         "input_schema": {
             "type": "object",
             "properties": {
-                "voice": {"type": "string",
-                          "enum": ["melvinn", "robot", "deep", "chipmunk",
-                                   "female", "whisper", "spanish"]},
+                "voice": {"type": "string"},
             },
             "required": ["voice"],
         },
+    },
+    {
+        "name": "list_voices",
+        "description": "List every voice MELVINN can speak with right now — "
+                       "natural (piper) voices installed on this robot plus the "
+                       "classic espeak presets. Use when the user asks what "
+                       "voices are available.",
+        "input_schema": {"type": "object", "properties": {}},
     },
 ]
 
@@ -1083,6 +1090,8 @@ def run_tool(name: str, tool_input: dict) -> str:
                             lambda: grab_all(color))
     if name == "set_voice":
         return set_voice(tool_input["voice"])
+    if name == "list_voices":
+        return list_voices()
     return f"Unknown tool: {name}"
 
 
@@ -1094,9 +1103,9 @@ SYSTEM = (
     "little robot. You can drive, move the arm, grab and release objects, play "
     "or download songs, and chat. Keep spoken replies short (1-2 sentences) "
     "since they are read aloud. Only act when asked.\n\n"
-    "You can speak in different voices (set_voice): melvinn (default), robot, "
-    "deep, chipmunk, female, whisper, spanish. If asked what voices you have, "
-    "list them.\n\n"
+    "You can speak in different voices: call list_voices to see what's "
+    "installed, set_voice to switch. If asked what voices you have, call "
+    "list_voices and read it out.\n\n"
     "TO GRAB / PICK UP AN OBJECT: call grab(color). To pick up ALL objects of "
     "a colour: call grab_all(color). Both run in the background and the user "
     "can say 'stop' to interrupt — just acknowledge and let them run; don't "
@@ -1238,11 +1247,10 @@ def local_brain(user_text: str) -> str:
         return robot_drive("left", float(m.group(1)) if m else 1.0)
 
     if "voice" in t:
-        for v in VOICES:
+        for v in list(VOICES) + _piper_voices():
             if v in t:
                 return set_voice(v)
-        return ("Which voice? I have: " + ", ".join(VOICES) +
-                ". Say for example: use your robot voice.")
+        return list_voices()
 
     if any(w in t for w in ("your name", "who are you", "melvinn", "melvin")):
         return ("I am MELVINN — Modular Experimental Learning Vehicle with "
@@ -1293,14 +1301,35 @@ VOICES = {
     "spanish": ("es+m3", 50, 160),     # habla español
 }
 _voice = os.environ.get("MELVINN_VOICE", "melvinn")
+PIPER_DIR = os.path.expanduser("~/piper")
+
+
+def _piper_voices() -> list[str]:
+    """Names of downloaded natural (piper) voices: ~/piper/<name>.onnx."""
+    names = [os.path.basename(p)[:-5] for p in glob(os.path.join(PIPER_DIR, "*.onnx"))]
+    return sorted(n for n in names if n != "voice")   # voice.onnx = the default
+
+
+def list_voices() -> str:
+    """Everything MELVINN can sound like right now, natural voices first."""
+    natural = _piper_voices()
+    if os.path.exists(PIPER_MODEL):
+        natural.insert(0, "melvinn (default)")
+    parts = []
+    if natural:
+        parts.append("Natural voices: " + ", ".join(natural) + ".")
+    parts.append("Classic robot voices: " +
+                 ", ".join(v for v in VOICES if v != "melvinn") + ".")
+    parts.append("Say for example: use your joe voice.")
+    return " ".join(parts)
 
 
 def set_voice(name: str) -> str:
-    """Switch MELVINN's speaking voice to one of the VOICES presets."""
+    """Switch MELVINN's voice: a VOICES preset or any downloaded piper model."""
     global _voice
     name = name.strip().lower()
-    if name not in VOICES:
-        return f"I don't have a '{name}' voice. I have: {', '.join(VOICES)}."
+    if name not in VOICES and name not in _piper_voices():
+        return f"I don't have a '{name}' voice. {list_voices()}"
     _voice = name
     speak(f"This is my {name} voice.")     # demo it immediately
     return f"Voice set to {name}."
