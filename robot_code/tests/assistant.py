@@ -1050,6 +1050,20 @@ TOOLS = [
                        "voices are available.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "play_sound",
+        "description": "Make a fun animal/creature noise: bark, woof, growl, "
+                       "howl, or meow. Use when the user asks MELVINN to bark, "
+                       "make a dog sound, meow, etc.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "sound": {"type": "string",
+                          "enum": ["bark", "woof", "growl", "howl", "meow"]},
+            },
+            "required": ["sound"],
+        },
+    },
 ]
 
 
@@ -1092,6 +1106,8 @@ def run_tool(name: str, tool_input: dict) -> str:
         return set_voice(tool_input["voice"])
     if name == "list_voices":
         return list_voices()
+    if name == "play_sound":
+        return play_sound(tool_input["sound"])
     return f"Unknown tool: {name}"
 
 
@@ -1105,7 +1121,9 @@ SYSTEM = (
     "since they are read aloud. Only act when asked.\n\n"
     "You can speak in different voices: call list_voices to see what's "
     "installed, set_voice to switch. If asked what voices you have, call "
-    "list_voices and read it out.\n\n"
+    "list_voices and read it out. You can also make fun noises with "
+    "play_sound (bark, woof, growl, howl, meow) — including silly voices "
+    "puppy, growl, alien, and giant.\n\n"
     "TO GRAB / PICK UP AN OBJECT: call grab(color). To pick up ALL objects of "
     "a colour: call grab_all(color). Both run in the background and the user "
     "can say 'stop' to interrupt — just acknowledge and let them run; don't "
@@ -1252,6 +1270,13 @@ def local_brain(user_text: str) -> str:
                 return set_voice(v)
         return list_voices()
 
+    # animal / creature noises (fun) — check before generic handling
+    if "dog" in t or "sound like" in t:
+        return play_sound("bark")
+    for s in SOUND_EFFECTS:
+        if s in t:
+            return play_sound(s)
+
     if any(w in t for w in ("your name", "who are you", "melvinn", "melvin")):
         return ("I am MELVINN — Modular Experimental Learning Vehicle with "
                 "Integrated Neural Networks. Melvin also means strong friend.")
@@ -1299,7 +1324,37 @@ VOICES = {
     "female":  ("en+f3", 60, 165),
     "whisper": ("en+whisper", 40, 150),
     "spanish": ("es+m3", 50, 160),     # habla español
+    # --- silly character voices ---
+    "puppy":   ("en+f5", 90, 200),     # squeaky excited little dog
+    "growl":   ("en+croak", 5, 110),   # big low grumbly dog / monster
+    "alien":   ("en+croak", 80, 175),  # squeaky-croaky little alien
+    "giant":   ("en+m6", 1, 95),       # slow booming giant
 }
+# Things MELVINN can "say" that are really sound effects, made from espeak.
+SOUND_EFFECTS = {
+    "bark":  ("puppy", "woof! woof woof!"),
+    "woof":  ("puppy", "woof! woof woof!"),
+    "growl": ("growl", "grrrrr rrrrr grrr"),
+    "howl":  ("puppy", "awoooooo"),
+    "meow":  ("chipmunk", "mee-ow, meow"),
+}
+
+
+def play_sound(name: str) -> str:
+    """Make an animal/creature noise with the TTS engine (a bit of fun)."""
+    global _voice
+    name = name.strip().lower()
+    if name not in SOUND_EFFECTS:
+        return f"I don't know how to {name}. I can: {', '.join(SOUND_EFFECTS)}."
+    preset, text = SOUND_EFFECTS[name]
+    saved = _voice
+    _voice = preset             # borrow the character voice just for the noise
+    try:
+        _say_espeak(text)       # espeak so pitch/speed apply, not piper
+        print(f"[robot] *{name}*")
+    finally:
+        _voice = saved
+    return f"*{name}*"
 _voice = os.environ.get("MELVINN_VOICE", "melvinn")
 PIPER_DIR = os.path.expanduser("~/piper")
 
