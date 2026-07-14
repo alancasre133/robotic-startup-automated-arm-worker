@@ -1664,10 +1664,37 @@ def speak(text: str) -> None:
 # ---------------------------------------------------------------------------
 _vosk_model = None  # loaded once — Model() takes seconds and ~200MB RAM on a Pi 3
 
+# Constrain Vosk to the words MELVINN actually understands. Feeding the
+# recognizer a fixed vocabulary ("grammar") is the single biggest free accuracy
+# win for a command robot -- it stops mis-hearing "grab" as "grand" etc. because
+# it only considers these words. "[unk]" lets genuinely unknown speech through
+# as a catch-all instead of forcing a wrong match. Set MELVINN_OPEN_MIC=1 to
+# disable this and use the full open vocabulary (better for free-form chat).
+WAKE_WORD = os.environ.get("MELVINN_WAKE_WORD", "melvinn").lower()
+COMMAND_VOCAB = (
+    "melvinn hey hi hello there "
+    "forward backward back left right straight ahead spin turn around stop go move come "
+    "grab pick up it that this thing object put down drop release let go hold "
+    "red green blue yellow orange the "
+    "arm base shoulder elbow wrist rotate gripper hand open close raise lower "
+    "degrees point to home ready reach lift "
+    "play song music download stop pause "
+    "voice change your name who are you what are you speak like use "
+    "bark woof growl howl meow dog cat sound make a noise "
+    "effect robot monster ghost dalek underwater telephone cave space giant chipmunk drunk normal none off "
+    "distance how far away is it "
+    "help what can you do tell me "
+    "zero one two three four five six seven eight nine ten "
+    "yes no okay thanks thank you please good "
+)
+USE_GRAMMAR = not os.environ.get("MELVINN_OPEN_MIC")
 
-def transcribe() -> str:
-    """Listen on the mic until a complete phrase is detected, return the text."""
-    global _vosk_model
+
+def _grammar_json() -> str:
+    return json.dumps([COMMAND_VOCAB.strip() + " [unk]"])
+
+
+def _require_vosk() -> None:
     if not _VOSK_AVAILABLE:
         raise RuntimeError(
             "Vosk not installed. Run: pip install vosk\n"
@@ -1680,31 +1707,107 @@ def transcribe() -> str:
             "Download vosk-model-small-en-us-0.15.zip from https://alphacephei.com/vosk/models\n"
             "and unzip it to ~/vosk-model"
         )
+
+
+def _new_recognizer(grammar: bool = True):
+    """A fresh KaldiRecognizer, grammar-constrained unless disabled."""
+    global _vosk_model
     if _vosk_model is None:
         print("[loading speech model...]")
         _vosk_model = Model(VOSK_MODEL_DIR)
-    rec = KaldiRecognizer(_vosk_model, SAMPLE_RATE)
+    if grammar and USE_GRAMMAR:
+        return KaldiRecognizer(_vosk_model, SAMPLE_RATE, _grammar_json())
+    return KaldiRecognizer(_vosk_model, SAMPLE_RATE)
 
-    print("[listening...]")
+
+def _open_mic():
     # arecord, not Python's sounddevice/PortAudio: PortAudio's raw ALSA
     # "default"/"sysdefault" device rejected 16kHz outright ("Invalid sample
     # rate"). plughw auto-converts, and `arecord -D plughw:1,0 -r 16000` is
     # the exact command already confirmed working (see voice-assistant.md).
-    proc = subprocess.Popen(
-        ["arecord", "-D", MIC_DEVICE, "-f", "S16_LE", "-c", "1", "-r", str(SAMPLE_RATE), "-t", "raw"],
+    return subprocess.Popen(
+        ["arecord", "-D", MIC_DEVICE, "-f", "S16_LE", "-c", "1",
+         "-r", str(SAMPLE_RATE), "-t", "raw"],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
     )
+
+
+def transcribe() -> str:
+    """Listen on the mic until a complete phrase is detected, return the text."""
+    _require_vosk()
+    rec = _new_recognizer(grammar=True)
+    print("[listening...]")
+    proc = _open_mic()
     try:
         while True:
             data = proc.stdout.read(4000)  # ~0.25s of audio at 16kHz mono S16LE
             if not data:
                 break
             if rec.AcceptWaveform(data):
-                result = json.loads(rec.Result())
-                text = result.get("text", "").strip()
+                text = json.loads(rec.Result()).get("text", "").strip()
                 if text:
                     print(f"[heard] {text}")
                     return text
+    finally:
+        proc.terminate()
+        proc.wait()
+
+
+# --- Wake word: MELVINN sleeps until it hears its name ----------------------
+# Two engines. Porcupine (Picovoice) is far more accurate/efficient on a Pi 3
+# and is used automatically when a PICOVOICE_ACCESS_KEY and a ~/melvinn.ppn
+# keyword file are present. Otherwise we fall back to spotting "melvinn" in the
+# Vosk stream -- no key, no extra install, works today.
+MELVINN_PPN = os.path.expanduser("~/melvinn.ppn")
+
+
+def _porcupine_ready() -> bool:
+    if not (os.environ.get("PICOVOICE_ACCESS_KEY") and os.path.exists(MELVINN_PPN)):
+        return False
+    try:
+        import pvporcupine  # noqa: F401
+        from pvrecorder import PvRecorder  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _wait_for_wake_porcupine() -> bool:
+    import pvporcupine
+    from pvrecorder import PvRecorder
+    pp = pvporcupine.create(access_key=os.environ["PICOVOICE_ACCESS_KEY"],
+                            keyword_paths=[MELVINN_PPN])
+    rec = PvRecorder(frame_length=pp.frame_length)
+    try:
+        rec.start()
+        while True:
+            if pp.process(rec.read()) >= 0:
+                return True
+    except (KeyboardInterrupt, EOFError):
+        return False
+    finally:
+        rec.stop(); rec.delete(); pp.delete()
+
+
+def wait_for_wake() -> bool:
+    """Block until MELVINN hears its wake word. Returns False if the mic dies."""
+    if _porcupine_ready():
+        return _wait_for_wake_porcupine()
+    _require_vosk()
+    rec = _new_recognizer(grammar=True)
+    proc = _open_mic()
+    try:
+        while True:
+            data = proc.stdout.read(4000)
+            if not data:
+                return False
+            # Check both partial and final text so it wakes mid-phrase.
+            if rec.AcceptWaveform(data):
+                text = json.loads(rec.Result()).get("text", "")
+            else:
+                text = json.loads(rec.PartialResult()).get("partial", "")
+            if WAKE_WORD in text.lower():
+                return True
     finally:
         proc.terminate()
         proc.wait()
@@ -1717,6 +1820,9 @@ def main() -> None:
     global _voice_mode
     voice_mode = "--type" not in sys.argv
     _voice_mode = voice_mode
+    # Wake-word mode (default in voice): MELVINN sleeps until it hears its name,
+    # then listens for one command. --nowake makes it act on every phrase.
+    wake_mode = voice_mode and "--nowake" not in sys.argv
 
     history: list = []
 
@@ -1725,7 +1831,10 @@ def main() -> None:
     print(f"Brain: {brain_label}  |  Input: {input_label}")
     print("Commands: move forward / spin / play a song / download despacito / stop")
     if voice_mode:
-        print("Speak after '[listening...]' appears. Ctrl-C to quit.\n")
+        if wake_mode:
+            print(f"Say '{WAKE_WORD.title()}' to wake me, then give a command. Ctrl-C to quit.\n")
+        else:
+            print("Speak after '[listening...]' appears. Ctrl-C to quit.\n")
     else:
         print("Type a command. Ctrl-C or 'quit' to exit.\n")
 
@@ -1735,11 +1844,17 @@ def main() -> None:
         while True:
             if voice_mode:
                 try:
+                    if wake_mode:
+                        print(f"[sleeping — say '{WAKE_WORD.title()}']")
+                        if not wait_for_wake():
+                            continue
+                        speak("Yes?")
                     user_text = transcribe()
                 except RuntimeError as e:
                     print(f"[STT error] {e}")
                     print("Falling back to keyboard input. Use --type flag to skip this message.")
                     voice_mode = False
+                    wake_mode = False
                     user_text = input("you> ").strip()
             else:
                 user_text = input("you> ").strip()
