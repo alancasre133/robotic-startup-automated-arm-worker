@@ -1286,7 +1286,7 @@ def local_brain(user_text: str) -> str:
         return robot_drive("left", float(m.group(1)) if m else 1.0)
 
     if "voice" in t:
-        for v in list(VOICES) + _piper_voices():
+        for v in list(VOICES) + _piper_voices() + _kokoro_voices():
             if v in t:
                 return set_voice(v)
         return list_voices()
@@ -1401,12 +1401,35 @@ def _piper_voices() -> list[str]:
     return sorted(n for n in names if n != "voice")   # voice.onnx = the default
 
 
+# --- Kokoro: high-quality neural TTS, called as a local HTTP server ---------
+# onnxruntime has no 32-bit ARM build, so rather than fight it on the Pi 3 we
+# talk to a Kokoro server (kokoro-fastapi, OpenAI-compatible /v1/audio/speech).
+# Run that server wherever it's fast -- your Mac -- and point the Pi at it with:
+#   export KOKORO_URL=http://<mac-tailscale-name>:8880/v1/audio/speech
+# When it's unreachable, speak() just falls back to Piper, so nothing breaks
+# offline. A voice named like af_heart / am_michael routes here automatically.
+KOKORO_URL = os.environ.get("KOKORO_URL", "")
+KOKORO_VOICES = [
+    "af_heart", "af_bella", "af_nicole", "af_sarah", "af_sky",
+    "am_michael", "am_adam", "am_fenrir", "am_puck",
+    "bf_emma", "bf_isabella", "bm_george", "bm_fable",
+]
+
+
+def _kokoro_voices() -> list[str]:
+    """Kokoro voices, but only when a server is configured to speak them."""
+    return KOKORO_VOICES if KOKORO_URL else []
+
+
 def list_voices() -> str:
     """Everything MELVINN can sound like right now, natural voices first."""
     natural = _piper_voices()
     if os.path.exists(PIPER_MODEL):
         natural.insert(0, "melvinn (default)")
     parts = []
+    if _kokoro_voices():
+        parts.append("High-quality Kokoro voices: " +
+                     ", ".join(_kokoro_voices()) + ".")
     if natural:
         parts.append("Natural voices: " + ", ".join(natural) + ".")
     parts.append("Classic robot voices: " +
@@ -1421,7 +1444,8 @@ def set_voice(name: str) -> str:
     """Switch MELVINN's voice: a VOICES preset or any downloaded piper model."""
     global _voice
     name = name.strip().lower()
-    if name not in VOICES and name not in _piper_voices():
+    if name not in VOICES and name not in _piper_voices() \
+            and name not in _kokoro_voices():
         return f"I don't have a '{name}' voice. {list_voices()}"
     _voice = name
     speak(f"This is my {name} voice.")     # demo it immediately
@@ -1496,6 +1520,37 @@ def _play_wav(wav: str) -> None:
     subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE, wav])
 
 
+def _say_kokoro(text: str) -> bool:
+    """Speak via a Kokoro server (OpenAI-compatible endpoint). False if it
+    isn't configured/reachable so the caller can fall back to Piper."""
+    if not KOKORO_URL:
+        return False
+    import json as _json
+    import urllib.request as _url
+    voice = _voice if _voice in KOKORO_VOICES else "af_heart"
+    body = _json.dumps({
+        "model": "kokoro", "voice": voice,
+        "input": text, "response_format": "wav",
+    }).encode()
+    wav = None
+    try:
+        req = _url.Request(KOKORO_URL, data=body,
+                           headers={"Content-Type": "application/json"})
+        with _url.urlopen(req, timeout=15) as resp:
+            audio = resp.read()
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            wav = f.name
+            f.write(audio)
+        _play_wav(wav)
+        return True
+    except Exception:
+        return False        # unreachable / server down -> fall back to Piper
+    finally:
+        if wav:
+            try: os.remove(wav)
+            except OSError: pass
+
+
 def _say_piper(text: str) -> bool:
     # Piper only speaks the default voice (one .onnx model). Named presets
     # fall through to espeak-ng, which can actually change voice on the fly.
@@ -1544,6 +1599,10 @@ def _say_espeak(text: str) -> None:
 def speak(text: str) -> None:
     print(f"[robot] {text}")
     if not text.strip():
+        return
+    # Kokoro (if a server is configured) -> Piper -> espeak. Each falls through
+    # to the next if it can't speak, so we always make *some* sound.
+    if _say_kokoro(text):
         return
     if not _say_piper(text):
         _say_espeak(text)
