@@ -896,6 +896,21 @@ TOOLS = [
             "required": ["state"],
         },
     },
+    {
+        "name": "set_voice",
+        "description": "Change MELVINN's speaking voice. Use when the user asks "
+                       "for a different voice (e.g. 'talk in a deep voice', "
+                       "'use your robot voice', 'habla en español').",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "voice": {"type": "string",
+                          "enum": ["melvinn", "robot", "deep", "chipmunk",
+                                   "female", "whisper", "spanish"]},
+            },
+            "required": ["voice"],
+        },
+    },
 ]
 
 
@@ -926,6 +941,8 @@ def run_tool(name: str, tool_input: dict) -> str:
         return arm_pose(tool_input["name"])
     if name == "gripper":
         return gripper(tool_input["state"])
+    if name == "set_voice":
+        return set_voice(tool_input["voice"])
     return f"Unknown tool: {name}"
 
 
@@ -1069,6 +1086,13 @@ def local_brain(user_text: str) -> str:
         m = re.search(r"(\d+(?:\.\d+)?)\s*(?:s|sec|second|seconds)?\b", t)
         return robot_drive("left", float(m.group(1)) if m else 1.0)
 
+    if "voice" in t:
+        for v in VOICES:
+            if v in t:
+                return set_voice(v)
+        return ("Which voice? I have: " + ", ".join(VOICES) +
+                ". Say for example: use your robot voice.")
+
     if any(w in t for w in ("your name", "who are you", "melvinn", "melvin")):
         return ("I am MELVINN — Modular Experimental Learning Vehicle with "
                 "Integrated Neural Networks. Melvin also means strong friend.")
@@ -1095,16 +1119,48 @@ def think(user_text: str, history: list) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Text-to-speech
+# Text-to-speech — MELVINN's voices
 # ---------------------------------------------------------------------------
+# Named voice presets. Each is espeak-ng parameters: (voice, pitch 0-99,
+# speed wpm). espeak-ng ships every voice, so all of these work offline with
+# nothing extra to install. Try them:  say in a deep voice hello  /
+# "change your voice to robot".
+VOICES = {
+    "melvinn": ("en+m3", 50, 160),     # the default — friendly male
+    "robot":   ("en+croak", 30, 140),  # croaky sci-fi robot
+    "deep":    ("en+m5", 20, 140),     # low and slow
+    "chipmunk": ("en+f4", 95, 210),    # squeaky and fast
+    "female":  ("en+f3", 60, 165),
+    "whisper": ("en+whisper", 40, 150),
+    "spanish": ("es+m3", 50, 160),     # habla español
+}
+_voice = os.environ.get("MELVINN_VOICE", "melvinn")
+
+
+def set_voice(name: str) -> str:
+    """Switch MELVINN's speaking voice to one of the VOICES presets."""
+    global _voice
+    name = name.strip().lower()
+    if name not in VOICES:
+        return f"I don't have a '{name}' voice. I have: {', '.join(VOICES)}."
+    _voice = name
+    speak(f"This is my {name} voice.")     # demo it immediately
+    return f"Voice set to {name}."
+
+
 def _say_piper(text: str) -> bool:
-    if shutil.which("piper") is None or not os.path.exists(PIPER_MODEL):
+    # Piper only speaks the default voice (one .onnx model). Named presets
+    # fall through to espeak-ng, which can actually change voice on the fly.
+    # (Drop more models in ~/piper/<name>.onnx to give piper more voices.)
+    model = PIPER_MODEL if _voice == "melvinn" else \
+        os.path.expanduser(f"~/piper/{_voice}.onnx")
+    if shutil.which("piper") is None or not os.path.exists(model):
         return False
     wav = None
     try:
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
             wav = f.name
-        subprocess.run(["piper", "--model", PIPER_MODEL, "--output_file", wav],
+        subprocess.run(["piper", "--model", model, "--output_file", wav],
                        input=text.encode(), stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL, check=True)
         subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE, wav])
@@ -1118,8 +1174,12 @@ def _say_piper(text: str) -> bool:
 
 
 def _say_espeak(text: str) -> None:
+    voice, pitch, speed = VOICES.get(_voice, VOICES["melvinn"])
     try:
-        tts = subprocess.Popen(["espeak-ng", text, "--stdout"], stdout=subprocess.PIPE)
+        tts = subprocess.Popen(
+            ["espeak-ng", "-v", voice, "-p", str(pitch), "-s", str(speed),
+             text, "--stdout"],
+            stdout=subprocess.PIPE)
         subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE], stdin=tts.stdout)
         tts.stdout.close()
         tts.wait()
