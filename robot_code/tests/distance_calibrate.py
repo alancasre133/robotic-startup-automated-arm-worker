@@ -63,14 +63,27 @@ def main() -> None:
         assistant.robot_drive("stop")
         cam.stop()
 
+    # Merge with any previous run for the SAME colour so re-running actually
+    # refines the curve instead of throwing the old samples away. (Different
+    # colour -> start fresh, since the calibration is per object.)
+    if os.path.exists(OUT):
+        try:
+            with open(OUT) as f:
+                prev = json.load(f)
+            if prev.get("color") == color:
+                samples = prev.get("samples", []) + samples
+        except (OSError, ValueError):
+            pass
+
     if len(samples) >= 2:
         samples.sort(key=lambda s: s["area_frac"])
         with open(OUT, "w") as f:
             json.dump({"color": color, "samples": samples}, f, indent=2)
-        print(f"\nSaved {len(samples)} samples to {OUT}")
-        print("The robot can now estimate distance from the camera. Re-run to refine.")
+        print(f"\nSaved {len(samples)} samples total to {OUT}")
+        print("The robot can now estimate distance from the camera. Re-run to add more.")
     else:
         print("\nNot enough samples (need the object visible AND the HC-SR04 wired).")
+        print(f"Tip: make sure you passed the right colour — you calibrated '{color}'.")
 
 
 if __name__ == "__main__":
