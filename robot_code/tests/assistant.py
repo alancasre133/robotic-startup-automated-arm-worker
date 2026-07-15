@@ -1734,11 +1734,11 @@ def speak(text: str) -> None:
     print(f"[robot] {text}")
     if not text.strip():
         return
-    # Best voice first, each falling through if it can't speak:
-    # sherpa-onnx (neural, default) -> kokoro-onnx -> Piper -> espeak.
-    # sherpa handles the default "melvinn" voice and any of its named speakers;
-    # a Piper/espeak voice name skips it so those still work.
-    if (_voice == "melvinn" or _voice in SHERPA_VOICES) and _say_sherpa(text):
+    # Default is Piper (fast, light). sherpa-onnx neural voices are OPT-IN only
+    # -- the Kokoro model needs ~900MB and swap-thrashes a 1GB Pi 3, so we never
+    # load it for the default voice; only when a sherpa speaker is explicitly
+    # selected (and even then, prefer a lighter model on low-RAM boards).
+    if _voice in SHERPA_VOICES and _say_sherpa(text):
         return
     if _say_kokoro(text):
         return
