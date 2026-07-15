@@ -22,8 +22,22 @@ Ctrl-C aborts.
 """
 
 import sys
+import threading
+import time
 
 import assistant
+
+
+def _distance_monitor(stop: threading.Event) -> None:
+    """Print the distance a few times a second for the WHOLE run — including
+    the arm state — so you can watch how far the object is while it reaches and
+    grips. Safe to run alongside the grab: distance_ahead() is lock-guarded, so
+    this thread and the grab loop never pulse the sensor at the same time.
+    """
+    while not stop.is_set():
+        d = assistant.distance_ahead()
+        print(f"    [dist] {d:6.1f} cm" if d >= 0 else "    [dist]   -- (no echo)")
+        time.sleep(0.3)
 
 
 def main() -> None:
@@ -35,14 +49,17 @@ def main() -> None:
     print(f"  distance_ahead() -> {d:.0f} cm" if d >= 0 else "  no sensor (-1)")
 
     print("\nRunning grab sequence (Ctrl-C to abort)...")
+    stop = threading.Event()
+    monitor = threading.Thread(target=_distance_monitor, args=(stop,), daemon=True)
+    monitor.start()
     try:
         result = assistant.grab_sequence(color)
         print(f"\nResult: {result}")
     except KeyboardInterrupt:
         print("\nAborted.")
     finally:
-        # Leave the wheels stopped no matter how we exit.
-        assistant.robot_drive("stop")
+        stop.set()                      # stop the distance printout
+        assistant.robot_drive("stop")   # leave the wheels stopped no matter what
 
 
 if __name__ == "__main__":

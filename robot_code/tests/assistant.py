@@ -360,6 +360,7 @@ TRIG_PIN = 13           # BCM
 ECHO_PIN = 19           # BCM
 _distance_sensor = None
 _distance_unavailable = False
+_distance_lock = threading.Lock()   # serialize HC-SR04 pulses across threads
 
 
 def distance_ahead() -> float:
@@ -376,22 +377,25 @@ def distance_ahead() -> float:
     global _distance_sensor, _distance_unavailable
     if _distance_unavailable:
         return -1.0
-    if _distance_sensor is None:
-        try:
-            from gpiozero import DistanceSensor
-            _distance_sensor = DistanceSensor(
-                echo=ECHO_PIN, trigger=TRIG_PIN, max_distance=2.0
-            )
-        except Exception:
-            _distance_unavailable = True
-            return -1.0
-    reads = []
-    for _ in range(3):
-        try:
-            reads.append(_distance_sensor.distance * 100.0)    # metres -> cm
-        except Exception:
-            pass
-        sleep(0.02)
+    # The lock keeps two threads (e.g. the grab loop + a distance monitor) from
+    # pulsing the HC-SR04 at the same time, which would corrupt both readings.
+    with _distance_lock:
+        if _distance_sensor is None:
+            try:
+                from gpiozero import DistanceSensor
+                _distance_sensor = DistanceSensor(
+                    echo=ECHO_PIN, trigger=TRIG_PIN, max_distance=2.0
+                )
+            except Exception:
+                _distance_unavailable = True
+                return -1.0
+        reads = []
+        for _ in range(3):
+            try:
+                reads.append(_distance_sensor.distance * 100.0)    # metres -> cm
+            except Exception:
+                pass
+            sleep(0.02)
     if not reads:
         return -1.0
     reads.sort()
