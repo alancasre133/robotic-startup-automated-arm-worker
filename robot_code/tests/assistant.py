@@ -1286,7 +1286,7 @@ def local_brain(user_text: str) -> str:
         return robot_drive("left", float(m.group(1)) if m else 1.0)
 
     if "voice" in t:
-        for v in list(VOICES) + _piper_voices() + _kokoro_voices():
+        for v in list(VOICES) + _sherpa_voices() + _piper_voices() + _kokoro_voices():
             if v in t:
                 return set_voice(v)
         return list_voices()
@@ -1452,12 +1452,95 @@ def _kokoro_engine():
     return _kokoro
 
 
+# --- sherpa-onnx: neural Kokoro TTS that actually installs on the 32-bit Pi 3 -
+# sherpa-onnx ships its own armv7l wheel and bundles the runtime, so it works
+# where kokoro-onnx (needs onnxruntime, no 32-bit wheel) fails. This is
+# MELVINN's best-quality local voice. Model dir = the extracted
+# ~/kokoro-en-v0_19/. Voices are speaker ids (sid) mapped to friendly names.
+SHERPA_DIR = os.path.expanduser("~/kokoro-en-v0_19")
+SHERPA_MODEL = os.path.join(SHERPA_DIR, "model.onnx")
+SHERPA_VOICES_BIN = os.path.join(SHERPA_DIR, "voices.bin")
+SHERPA_TOKENS = os.path.join(SHERPA_DIR, "tokens.txt")
+SHERPA_DATA_DIR = os.path.join(SHERPA_DIR, "espeak-ng-data")
+SHERPA_VOICES = {        # friendly name -> speaker id in kokoro-en-v0_19
+    "af": 0, "bella": 1, "nicole": 2, "sarah": 3, "sky": 4,
+    "adam": 5, "michael": 6, "emma": 7, "isabella": 8, "george": 9, "lewis": 10,
+}
+DEFAULT_SHERPA_VOICE = os.environ.get("MELVINN_SHERPA_VOICE", "bella")
+_sherpa_tts = None
+_sherpa_unavailable = False
+
+
+def _sherpa_available() -> bool:
+    return os.path.exists(SHERPA_MODEL) and os.path.exists(SHERPA_VOICES_BIN)
+
+
+def _sherpa_voices() -> list[str]:
+    return list(SHERPA_VOICES) if _sherpa_available() else []
+
+
+def _sherpa_engine():
+    """Load the sherpa-onnx Kokoro model once (lazy, like the camera/arm)."""
+    global _sherpa_tts, _sherpa_unavailable
+    if _sherpa_tts is not None or _sherpa_unavailable:
+        return _sherpa_tts
+    if not _sherpa_available():
+        _sherpa_unavailable = True
+        return None
+    try:
+        import sherpa_onnx
+        cfg = sherpa_onnx.OfflineTtsConfig(
+            model=sherpa_onnx.OfflineTtsModelConfig(
+                kokoro=sherpa_onnx.OfflineTtsKokoroModelConfig(
+                    model=SHERPA_MODEL, voices=SHERPA_VOICES_BIN,
+                    tokens=SHERPA_TOKENS, data_dir=SHERPA_DATA_DIR,
+                ),
+                num_threads=2, provider="cpu",
+            ),
+            max_num_sentences=1,
+        )
+        _sherpa_tts = sherpa_onnx.OfflineTts(cfg)
+    except Exception as exc:
+        print(f"[sherpa-onnx unavailable: {exc}] — using Piper instead")
+        _sherpa_unavailable = True
+        return None
+    return _sherpa_tts
+
+
+def _say_sherpa(text: str) -> bool:
+    """Speak with the neural sherpa-onnx Kokoro voice. False -> fall back."""
+    eng = _sherpa_engine()
+    if eng is None:
+        return False
+    name = _voice if _voice in SHERPA_VOICES else DEFAULT_SHERPA_VOICE
+    sid = SHERPA_VOICES.get(name, SHERPA_VOICES[DEFAULT_SHERPA_VOICE])
+    wav = None
+    try:
+        import soundfile as sf
+        import numpy as np
+        audio = eng.generate(text, sid=sid, speed=1.0)
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            wav = f.name
+        sf.write(wav, np.array(audio.samples, dtype="float32"), audio.sample_rate)
+        _play_wav(wav)
+        return True
+    except Exception as exc:
+        print(f"[sherpa-onnx error: {exc}] — using Piper instead")
+        return False
+    finally:
+        if wav:
+            try: os.remove(wav)
+            except OSError: pass
+
+
 def list_voices() -> str:
     """Everything MELVINN can sound like right now, natural voices first."""
     natural = _piper_voices()
     if os.path.exists(PIPER_MODEL):
         natural.insert(0, "melvinn (default)")
     parts = []
+    if _sherpa_voices():
+        parts.append("Neural voices (best): " + ", ".join(_sherpa_voices()) + ".")
     if _kokoro_voices():
         parts.append("High-quality Kokoro voices: " +
                      ", ".join(_kokoro_voices()) + ".")
@@ -1476,7 +1559,7 @@ def set_voice(name: str) -> str:
     global _voice
     name = name.strip().lower()
     if name not in VOICES and name not in _piper_voices() \
-            and name not in _kokoro_voices():
+            and name not in _kokoro_voices() and name not in _sherpa_voices():
         return f"I don't have a '{name}' voice. {list_voices()}"
     _voice = name
     speak(f"This is my {name} voice.")     # demo it immediately
@@ -1651,8 +1734,12 @@ def speak(text: str) -> None:
     print(f"[robot] {text}")
     if not text.strip():
         return
-    # Kokoro (if a server is configured) -> Piper -> espeak. Each falls through
-    # to the next if it can't speak, so we always make *some* sound.
+    # Best voice first, each falling through if it can't speak:
+    # sherpa-onnx (neural, default) -> kokoro-onnx -> Piper -> espeak.
+    # sherpa handles the default "melvinn" voice and any of its named speakers;
+    # a Piper/espeak voice name skips it so those still work.
+    if (_voice == "melvinn" or _voice in SHERPA_VOICES) and _say_sherpa(text):
+        return
     if _say_kokoro(text):
         return
     if not _say_piper(text):
