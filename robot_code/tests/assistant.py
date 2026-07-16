@@ -648,6 +648,94 @@ def release_sequence() -> str:
     return "Dropped it."
 
 
+# ---------------------------------------------------------------------------
+# Run the repo's test scripts by voice — "Melvinn, run the grab test"
+# ---------------------------------------------------------------------------
+TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Whitelist ONLY — never arbitrary shell. Interactive scripts (arm_jog_test,
+# enroll_object, papoi) are excluded: they need a keyboard, so they'd just
+# hang the voice loop. Value = (filename, takes_color_arg, description).
+SCRIPTS = {
+    "grab test":          ("grab_test.py",          True,  "full camera+sonar grab"),
+    "distance monitor":   ("distance_monitor.py",   False, "live distance readout"),
+    "distance calibrate": ("distance_calibrate.py", True,  "learn size->distance"),
+    "vision test":        ("vision_find_test.py",   True,  "live colour detection"),
+    "vision track":       ("vision_track.py",       False, "face detect + track"),
+    "obstacle avoid":     ("obstacle_avoid.py",     False, "drive + avoid walls"),
+    "arm test":           ("arm_test.py",           False, "exercise all 6 joints"),
+    "arm sequence":       ("arm_sequence.py",       False, "scripted arm routine"),
+    "recognize test":     ("recognize_test.py",     False, "ORB object recognition"),
+    "motor test":         ("motor_test.py",         False, "exercise the wheels"),
+    "camera test":        ("camera_test.py",        False, "capture a test photo"),
+}
+
+
+def _release_hardware() -> None:
+    """Close our GPIO/camera handles so a child script can claim the pins.
+
+    gpiozero devices hold their pins exclusively — if we kept them, the child
+    would die with 'GPIO busy'. Everything re-inits lazily on next use here.
+    """
+    global motor_a, motor_b, _distance_sensor
+    for dev in (motor_a, motor_b, _distance_sensor):
+        try:
+            if dev is not None:
+                dev.close()
+        except Exception:
+            pass
+    motor_a = motor_b = None
+    _distance_sensor = None
+    _close_camera()
+
+
+def list_scripts() -> str:
+    return ("I can run: " + ", ".join(SCRIPTS) +
+            ". Say for example: run the grab test with yellow.")
+
+
+def run_script(name: str, arg: str = "") -> str:
+    """Launch a whitelisted test script in the background. 'stop' kills it."""
+    name = name.strip().lower()
+    if name not in SCRIPTS:
+        return f"I don't have a script called '{name}'. {list_scripts()}"
+    filename, takes_color, _ = SCRIPTS[name]
+    cmd = [sys.executable, os.path.join(TESTS_DIR, filename)]
+    if takes_color and arg:
+        cmd.append(arg)
+
+    def _run() -> str:
+        _release_hardware()          # free pins/camera for the child
+        log = tempfile.NamedTemporaryFile(
+            mode="w+", suffix=".log", delete=False)
+        try:
+            proc = subprocess.Popen(cmd, cwd=TESTS_DIR, stdout=log,
+                                    stderr=subprocess.STDOUT)
+            while proc.poll() is None:
+                if _stopped():
+                    proc.terminate()
+                    try:
+                        proc.wait(timeout=3)
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                    return f"Stopped the {name}."
+                sleep(0.3)
+            log.flush()
+            log.seek(0)
+            lines = [l.strip() for l in log.readlines() if l.strip()]
+            tail = lines[-1] if lines else "no output"
+            return (f"The {name} finished. Last line: {tail}"
+                    if proc.returncode == 0 else
+                    f"The {name} exited with an error. Last line: {tail}")
+        finally:
+            log.close()
+            try: os.remove(log.name)
+            except OSError: pass
+
+    label = f"running the {name}" + (f" with {arg}" if takes_color and arg else "")
+    return start_action(label, _run)
+
+
 def grab_all(color: str = "red", max_objects: int = 3) -> str:
     """Task loop: keep finding, grabbing, and setting aside `color` objects
     until none are left in view (or max_objects, or the user says stop).
@@ -1069,6 +1157,30 @@ TOOLS = [
         },
     },
     {
+        "name": "run_script",
+        "description": "Run one of the robot's test scripts in the background "
+                       "(the user can say 'stop' to kill it). Use when the "
+                       "user asks to run/launch/start a test by name, e.g. "
+                       "'run the grab test with yellow', 'start the distance "
+                       "monitor', 'run the arm test'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string",
+                         "enum": list(SCRIPTS)},
+                "arg": {"type": "string",
+                        "description": "Optional colour argument for scripts "
+                                       "that take one (red/green/blue/yellow)."},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "list_scripts",
+        "description": "List the test scripts MELVINN can run by voice.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "set_effect",
         "description": "Layer a character sound effect over MELVINN's current "
                        "voice (works on any voice). Use for 'sound like a "
@@ -1131,6 +1243,10 @@ def run_tool(name: str, tool_input: dict) -> str:
         return play_sound(tool_input["sound"])
     if name == "set_effect":
         return set_effect(tool_input["effect"])
+    if name == "run_script":
+        return run_script(tool_input["name"], tool_input.get("arg", ""))
+    if name == "list_scripts":
+        return list_scripts()
     return f"Unknown tool: {name}"
 
 
@@ -1142,6 +1258,10 @@ SYSTEM = (
     "little robot. You can drive, move the arm, grab and release objects, play "
     "or download songs, and chat. Keep spoken replies short (1-2 sentences) "
     "since they are read aloud. Only act when asked.\n\n"
+    "You can run the robot's test scripts with run_script (grab test, "
+    "distance monitor, vision test, arm test, ...) — they run in the "
+    "background and 'stop' kills them. Use it when the user asks to run or "
+    "start a test.\n\n"
     "You can speak in different voices: call list_voices to see what's "
     "installed, set_voice to switch. If asked what voices you have, call "
     "list_voices and read it out. You can also make fun noises with "
@@ -1294,6 +1414,18 @@ def local_brain(user_text: str) -> str:
             if v in t:
                 return set_voice(v)
         return list_voices()
+
+    # run a whitelisted test script ("run the grab test with yellow")
+    if any(w in t for w in ("run", "launch", "start the")):
+        for s in SCRIPTS:
+            if s in t or s.replace(" ", "") in t.replace(" ", ""):
+                color = next((c for c in ("red", "green", "blue", "yellow") if c in t), "")
+                return run_script(s, color)
+        if "script" in t or "test" in t:
+            return list_scripts()
+
+    if "script" in t and ("list" in t or "what" in t or "which" in t):
+        return list_scripts()
 
     # SoX character effects layered on any voice ("add a monster effect")
     if "effect" in t:
@@ -1774,6 +1906,7 @@ COMMAND_VOCAB = (
     "bark woof growl howl meow dog cat sound make a noise "
     "effect robot monster ghost dalek underwater telephone cave space giant chipmunk drunk normal none off "
     "distance how far away is it "
+    "run launch script test monitor calibrate vision track avoid sequence recognize "
     "help what can you do tell me "
     "zero one two three four five six seven eight nine ten "
     "yes no okay thanks thank you please good "
