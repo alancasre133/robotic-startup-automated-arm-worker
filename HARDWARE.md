@@ -27,13 +27,23 @@ the board's silkscreen GPIO# labels).
 | 1 | Raspberry Pi 3 (Model A+, 3B, or 3B+) | 1 | The brain — runs the control code | 700–1000 |
 | 2 | microSD card, 16 GB+ (Class 10/A1) | 1 | Operating system (Raspberry Pi OS Lite, Trixie) | 120–200 |
 | 3 | USB power bank, 5V / 2A+ — bought: [Redmi 20000mAh 18W Fast Charge Power Bank](https://www.mercadolibre.com.mx/20000mah-redmi-18w-fast-charge-power-bank-black/p/MLM21029066) | 1 | Powers the Pi (kept separate from motor power) | 200–450 |
-| 4 | 2WD robot car chassis kit | 1 | Frame, 2× TT gear motors, 2 wheels, caster, AA holder | 150–350 |
-| 5 | L9110S dual H-bridge motor driver | 1 | Lets the Pi drive both motors forward/back | 30–60 |
+| 4 | 4WD robot car chassis kit (4× TT gear motors + wheels) | 1 | Frame + drivetrain. Replaced the original 2WD/caster chassis — the arm's weight was too much for two driven wheels | 150–400 |
+| 5 | L9110S dual H-bridge motor driver | 1 | Lets the Pi drive the motors forward/back | 30–60 |
 | 6 | AA batteries | 4 | Motor power (~6V), via the holder in the kit | 40–80 |
 | 7 | Dupont jumper wires (M–F & F–F, 40+) | 1 set | Pi GPIO ↔ L9110S, battery joins | 80–120 |
 
-> The chassis kit (#4) usually bundles the motors, wheels, caster, and AA holder.
-> If you buy parts separately you'll also need 2× TT gear motors + wheels.
+> The chassis kit (#4) usually bundles the motors, wheels, and battery holder.
+> If you buy parts separately you'll also need 4× TT gear motors + wheels.
+>
+> ⚠️ **4WD wiring caveat:** the two extra motors are currently **paralleled onto
+> the existing L9110S channels** (front+rear of each side share one channel).
+> That puts two TT motors' breakaway current (~2A) on a channel rated ~800mA —
+> the driver sags/limits exactly when the bot tries to start moving. If starts
+> are unreliable, the proper fix is a **second L9110S** for the rear pair
+> (spare PCA9685 channels 6–9 can supply its logic inputs — no extra Pi GPIO
+> needed). When paralleling, mind polarity: front/rear motors are mounted
+> mirrored, so one motor of each pair needs its leads swapped or the pair
+> fights itself.
 
 ## Optional — camera (vision)
 
@@ -151,6 +161,10 @@ Pi GPIO → L9110S (BCM numbers):
 | B-1A | 13 | GPIO27 |
 | B-2A | 15 | GPIO22 |
 | GND  | 6  | (ground) |
+
+On the 4WD chassis each L9110S channel drives **two paralleled TT motors**
+(front + rear of one side) — see the overcurrent caveat in the Core build
+section above.
 
 Power: battery **+** → L9110S **VCC**, battery **−** → Pi **pin 9** (GND).
 The Pi is powered separately by the USB power bank.
