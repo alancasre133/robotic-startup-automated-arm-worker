@@ -1,0 +1,246 @@
+<?xml version="1.0"?>
+<!--
+  MELVINN — URDF description for ROS 2.
+
+  Models the real robot as built: a 4WD acrylic chassis carrying a 6-DOF
+  MG996R arm on a PCA9685, an HC-SR04 facing forward, and the IMX219 camera
+  riding on the wrist.
+
+  JOINT NAMES MATCH THE FIRMWARE. The six arm joints are named exactly as in
+  ARM_JOINTS in robot_code/tests/assistant.py (base, shoulder, elbow, wrist,
+  wrist_rotate, gripper) so a /joint_states message from the robot lines up
+  with this model with no translation layer in between.
+
+  ANGLE CONVENTION. Servos are 0-180 degrees; ROS joints are radians with zero
+  at the neutral pose. Zero here means each joint's ARM_CENTER_ANGLES value —
+  shoulder 180, elbow 45, everything else 90 — so the limits below are
+  asymmetric where the centre isn't 90. Those centres were found on the real
+  robot: the arm fouls the chassis at other values.
+
+  ⚠️ DIMENSIONS ARE ESTIMATES from typical part sizes — nothing in the repo
+  records measured lengths. Everything is a property at the top of this file,
+  so measuring the real robot and correcting them is a one-place edit.
+-->
+<robot name="melvinn" xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- ===================== dimensions (metres) ===================== -->
+  <!-- Chassis: typical 4WD acrylic plate -->
+  <xacro:property name="chassis_len"   value="0.200"/>
+  <xacro:property name="chassis_wid"   value="0.150"/>
+  <xacro:property name="chassis_thick" value="0.005"/>
+
+  <!-- TT gearmotor wheels (the yellow ones) -->
+  <xacro:property name="wheel_radius"  value="0.0325"/>
+  <xacro:property name="wheel_width"   value="0.027"/>
+  <xacro:property name="wheel_x"       value="0.065"/>   <!-- from centre, fore/aft -->
+  <xacro:property name="wheel_y"       value="0.080"/>   <!-- from centre, left/right -->
+
+  <!-- Arm segment lengths -->
+  <xacro:property name="arm_base_h"    value="0.050"/>
+  <xacro:property name="upper_arm_len" value="0.100"/>
+  <xacro:property name="forearm_len"   value="0.095"/>
+  <xacro:property name="wrist_len"     value="0.055"/>
+  <xacro:property name="gripper_len"   value="0.080"/>
+
+  <xacro:property name="PI" value="3.14159265359"/>
+
+  <!-- ===================== materials ===================== -->
+  <material name="acrylic"><color rgba="0.85 0.85 0.90 0.55"/></material>
+  <material name="black">  <color rgba="0.10 0.10 0.10 1.0"/></material>
+  <material name="yellow"> <color rgba="0.95 0.80 0.10 1.0"/></material>
+  <material name="blue">   <color rgba="0.15 0.35 0.85 1.0"/></material>
+  <material name="green">  <color rgba="0.20 0.70 0.30 1.0"/></material>
+
+  <!-- Wheels are identical apart from placement -->
+  <xacro:macro name="wheel" params="name x y">
+    <link name="wheel_${name}_link">
+      <visual>
+        <origin rpy="${PI/2} 0 0"/>
+        <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
+        <material name="yellow"/>
+      </visual>
+    </link>
+    <!-- continuous: wheels spin freely, no limit -->
+    <joint name="wheel_${name}_joint" type="continuous">
+      <parent link="base_link"/>
+      <child  link="wheel_${name}_link"/>
+      <origin xyz="${x} ${y} 0"/>
+      <axis xyz="0 1 0"/>
+    </joint>
+  </xacro:macro>
+
+  <!-- ===================== chassis ===================== -->
+  <!-- base_footprint sits on the ground: the frame Nav2 drives around. -->
+  <link name="base_footprint"/>
+
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child  link="base_link"/>
+    <origin xyz="0 0 ${wheel_radius}"/>
+  </joint>
+
+  <link name="base_link">
+    <visual>
+      <geometry><box size="${chassis_len} ${chassis_wid} ${chassis_thick}"/></geometry>
+      <material name="acrylic"/>
+    </visual>
+  </link>
+
+  <xacro:wheel name="front_left"  x="${wheel_x}"  y="${wheel_y}"/>
+  <xacro:wheel name="front_right" x="${wheel_x}"  y="${-wheel_y}"/>
+  <xacro:wheel name="rear_left"   x="${-wheel_x}" y="${wheel_y}"/>
+  <xacro:wheel name="rear_right"  x="${-wheel_x}" y="${-wheel_y}"/>
+
+  <!-- ===================== ultrasonic ===================== -->
+  <!-- HC-SR04, forward-facing. ros_bridge publishes sensor_msgs/Range here. -->
+  <link name="ultrasonic_link">
+    <visual>
+      <geometry><box size="0.010 0.045 0.020"/></geometry>
+      <material name="blue"/>
+    </visual>
+  </link>
+  <joint name="ultrasonic_joint" type="fixed">
+    <parent link="base_link"/>
+    <child  link="ultrasonic_link"/>
+    <origin xyz="${chassis_len/2} 0 0.015"/>
+  </joint>
+
+  <!-- ===================== arm ===================== -->
+  <!-- Mounted toward the front of the plate, as on the real robot. -->
+  <link name="arm_base_link">
+    <visual>
+      <origin xyz="0 0 ${arm_base_h/2}"/>
+      <geometry><box size="0.055 0.055 ${arm_base_h}"/></geometry>
+      <material name="black"/>
+    </visual>
+  </link>
+  <joint name="arm_mount_joint" type="fixed">
+    <parent link="base_link"/>
+    <child  link="arm_base_link"/>
+    <origin xyz="0.040 0 ${chassis_thick/2}"/>
+  </joint>
+
+  <!-- ch 0: base — yaw. Centre 90 deg, so +/- 90 deg of travel. -->
+  <link name="shoulder_link">
+    <visual>
+      <origin xyz="0 0 0.020"/>
+      <geometry><box size="0.050 0.050 0.040"/></geometry>
+      <material name="black"/>
+    </visual>
+  </link>
+  <joint name="base" type="revolute">
+    <parent link="arm_base_link"/>
+    <child  link="shoulder_link"/>
+    <origin xyz="0 0 ${arm_base_h}"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${-PI/2}" upper="${PI/2}" effort="10" velocity="1.0"/>
+  </joint>
+
+  <!-- ch 1: shoulder — pitch. Centre 180 deg (arm up and back, clearing the
+       chassis), so travel runs 0..180 deg => -PI..0 rad. -->
+  <link name="upper_arm_link">
+    <visual>
+      <origin xyz="0 0 ${upper_arm_len/2}"/>
+      <geometry><box size="0.030 0.040 ${upper_arm_len}"/></geometry>
+      <material name="black"/>
+    </visual>
+  </link>
+  <joint name="shoulder" type="revolute">
+    <parent link="shoulder_link"/>
+    <child  link="upper_arm_link"/>
+    <origin xyz="0 0 0.040"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${-PI}" upper="0.0" effort="10" velocity="1.0"/>
+  </joint>
+
+  <!-- ch 2: elbow — pitch. Centre 45 deg => -45..135 deg. -->
+  <link name="forearm_link">
+    <visual>
+      <origin xyz="0 0 ${forearm_len/2}"/>
+      <geometry><box size="0.028 0.036 ${forearm_len}"/></geometry>
+      <material name="black"/>
+    </visual>
+  </link>
+  <joint name="elbow" type="revolute">
+    <parent link="upper_arm_link"/>
+    <child  link="forearm_link"/>
+    <origin xyz="0 0 ${upper_arm_len}"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${-PI/4}" upper="${3*PI/4}" effort="10" velocity="1.0"/>
+  </joint>
+
+  <!-- ch 3: wrist — pitch. Centre 90 deg. -->
+  <link name="wrist_link">
+    <visual>
+      <origin xyz="0 0 ${wrist_len/2}"/>
+      <geometry><box size="0.026 0.032 ${wrist_len}"/></geometry>
+      <material name="black"/>
+    </visual>
+  </link>
+  <joint name="wrist" type="revolute">
+    <parent link="forearm_link"/>
+    <child  link="wrist_link"/>
+    <origin xyz="0 0 ${forearm_len}"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${-PI/2}" upper="${PI/2}" effort="10" velocity="1.0"/>
+  </joint>
+
+  <!-- ch 4: wrist_rotate — roll. Centre 90 deg. Verified empirically as
+       channel 4 (the jog test proved it, against an earlier wrong guess). -->
+  <link name="wrist_rotate_link">
+    <visual>
+      <origin xyz="0 0 0.015"/>
+      <geometry><cylinder radius="0.018" length="0.030"/></geometry>
+      <material name="black"/>
+    </visual>
+  </link>
+  <joint name="wrist_rotate" type="revolute">
+    <parent link="wrist_link"/>
+    <child  link="wrist_rotate_link"/>
+    <origin xyz="0 0 ${wrist_len}"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="${-PI/2}" upper="${PI/2}" effort="10" velocity="1.0"/>
+  </joint>
+
+  <!-- ch 5: gripper — the claw. One revolute joint stands in for the linkage;
+       real fingers are a mechanism driven by a single servo. -->
+  <link name="gripper_link">
+    <visual>
+      <origin xyz="0 0 ${gripper_len/2}"/>
+      <geometry><box size="0.020 0.060 ${gripper_len}"/></geometry>
+      <material name="green"/>
+    </visual>
+  </link>
+  <joint name="gripper" type="revolute">
+    <parent link="wrist_rotate_link"/>
+    <child  link="gripper_link"/>
+    <origin xyz="0 0 0.030"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="${-PI/2}" upper="${PI/2}" effort="10" velocity="1.0"/>
+  </joint>
+
+  <!-- ===================== camera ===================== -->
+  <!-- IMX219 rides on the wrist, looking along the gripper. Mounted upside
+       down on the real robot (see FLIP_180 in the camera scripts) — that's a
+       driver-side fix, so this frame is the corrected, right-way-up view. -->
+  <link name="camera_link">
+    <visual>
+      <geometry><box size="0.010 0.025 0.024"/></geometry>
+      <material name="blue"/>
+    </visual>
+  </link>
+  <joint name="camera_joint" type="fixed">
+    <parent link="wrist_rotate_link"/>
+    <child  link="camera_link"/>
+    <origin xyz="0.025 0 0.020" rpy="0 0 0"/>
+  </joint>
+
+  <!-- ROS camera convention: z forward, x right, y down -->
+  <link name="camera_optical_frame"/>
+  <joint name="camera_optical_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child  link="camera_optical_frame"/>
+    <origin rpy="${-PI/2} 0 ${-PI/2}"/>
+  </joint>
+
+</robot>
