@@ -21,6 +21,7 @@ from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -30,8 +31,12 @@ def generate_launch_description():
     gui = LaunchConfiguration("gui")
 
     # Command(...) runs xacro at launch time and feeds the expanded URDF in.
+    # value_type=str is required: without it launch tries to parse the URDF's
+    # XML as YAML and the whole launch dies.
     robot_description = {
-        "robot_description": Command(["xacro ", xacro_file])
+        "robot_description": ParameterValue(
+            Command(["xacro ", xacro_file]), value_type=str
+        )
     }
 
     return LaunchDescription([
@@ -66,5 +71,6 @@ def generate_launch_description():
             package="rviz2",
             executable="rviz2",
             output="screen",
+            arguments=["-d", os.path.join(pkg, "rviz", "melvinn.rviz")],
         ),
     ])
