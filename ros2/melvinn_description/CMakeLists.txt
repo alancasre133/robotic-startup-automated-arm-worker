@@ -8,4 +8,8 @@ install(DIRECTORY urdf launch rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(PROGRAMS scripts/mass_report.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 ament_package()

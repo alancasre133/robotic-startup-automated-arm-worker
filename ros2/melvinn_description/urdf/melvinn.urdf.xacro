@@ -3,8 +3,9 @@
   MELVINN — URDF description for ROS 2.
 
   Models the real robot as built: a 4WD acrylic chassis carrying a 6-DOF
-  MG996R arm on a PCA9685, an HC-SR04 facing forward, and the IMX219 camera
-  riding on the wrist.
+  MG996R arm on a PCA9685, an HC-SR04 facing forward, the IMX219 camera on
+  the wrist, and all the electronics that actually ride along (Pi, two
+  battery packs, power bank, speakerphone, USB hub, motor driver).
 
   JOINT NAMES MATCH THE FIRMWARE. The six arm joints are named exactly as in
   ARM_JOINTS in robot_code/tests/assistant.py (base, shoulder, elbow, wrist,
@@ -17,32 +18,74 @@
   asymmetric where the centre isn't 90. Those centres were found on the real
   robot: the arm fouls the chassis at other values.
 
-  ⚠️ DIMENSIONS ARE ESTIMATES from typical part sizes — nothing in the repo
-  records measured lengths. Everything is a property at the top of this file,
-  so measuring the real robot and correcting them is a one-place edit.
+  MASSES exist so the model can answer "why won't it move" quantitatively —
+  total weight and centre of gravity. They're spec/typical values per part
+  (see the mass properties block). A URDF cannot model the *electrical* side
+  (battery sag under current), which bench testing suggests is the bigger
+  factor — see ros2/README.md.
+
+  ⚠️ DIMENSIONS AND COMPONENT PLACEMENT ARE ESTIMATES. Nothing in the repo
+  records measured lengths or where each board is bolted. Everything is a
+  property at the top of this file, so correcting them is a one-place edit.
 -->
 <robot name="melvinn" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+  <xacro:include filename="$(find melvinn_description)/urdf/inertia.xacro"/>
+
   <!-- ===================== dimensions (metres) ===================== -->
-  <!-- Chassis: typical 4WD acrylic plate -->
   <xacro:property name="chassis_len"   value="0.200"/>
   <xacro:property name="chassis_wid"   value="0.150"/>
   <xacro:property name="chassis_thick" value="0.005"/>
 
-  <!-- TT gearmotor wheels (the yellow ones) -->
   <xacro:property name="wheel_radius"  value="0.0325"/>
   <xacro:property name="wheel_width"   value="0.027"/>
-  <xacro:property name="wheel_x"       value="0.065"/>   <!-- from centre, fore/aft -->
-  <xacro:property name="wheel_y"       value="0.080"/>   <!-- from centre, left/right -->
+  <xacro:property name="wheel_x"       value="0.065"/>
+  <xacro:property name="wheel_y"       value="0.080"/>
 
-  <!-- Arm segment lengths -->
   <xacro:property name="arm_base_h"    value="0.050"/>
   <xacro:property name="upper_arm_len" value="0.100"/>
   <xacro:property name="forearm_len"   value="0.095"/>
   <xacro:property name="wrist_len"     value="0.055"/>
   <xacro:property name="gripper_len"   value="0.080"/>
 
+  <xacro:property name="deck"  value="${chassis_thick/2}"/>   <!-- chassis top -->
+  <xacro:property name="deck2" value="0.055"/>                <!-- upper tier -->
+
   <xacro:property name="PI" value="3.14159265359"/>
+
+  <!-- ===================== mass properties (kg) =====================
+       Where these come from:
+         MG996R servo            0.055 each (datasheet)
+         Raspberry Pi 3A+        0.029      (spec)
+         TT gearmotor            0.030 each (typical) — carried on the wheel
+                                            link, since it sits at the wheel
+         Redmi 20000mAh bank     0.350      (typical for 20Ah)
+         Blomiky 6V 2200mAh NiMH 0.200      (typical 5-cell sub-C pack)
+         4x AA + holder          0.120
+         USB speakerphone        0.200
+         acrylic 4WD chassis     0.250      (both plates + standoffs)
+  -->
+  <xacro:property name="chassis_mass"  value="0.250"/>
+  <xacro:property name="wheel_mass"    value="0.065"/>  <!-- wheel + its TT motor -->
+
+  <xacro:property name="m_arm_base"    value="0.075"/>
+  <xacro:property name="m_shoulder"    value="0.075"/>
+  <xacro:property name="m_upper_arm"   value="0.090"/>
+  <xacro:property name="m_forearm"     value="0.075"/>
+  <xacro:property name="m_wrist"       value="0.070"/>
+  <xacro:property name="m_wrist_rot"   value="0.060"/>
+  <xacro:property name="m_gripper"     value="0.080"/>
+
+  <xacro:property name="m_pi"          value="0.029"/>
+  <xacro:property name="m_power_bank"  value="0.350"/>
+  <xacro:property name="m_drive_batt"  value="0.120"/>
+  <xacro:property name="m_servo_batt"  value="0.200"/>
+  <xacro:property name="m_pca9685"     value="0.010"/>
+  <xacro:property name="m_l9110s"      value="0.005"/>
+  <xacro:property name="m_speaker"     value="0.200"/>
+  <xacro:property name="m_usb_hub"     value="0.040"/>
+  <xacro:property name="m_ultrasonic"  value="0.010"/>
+  <xacro:property name="m_camera"      value="0.015"/>
 
   <!-- ===================== materials ===================== -->
   <material name="acrylic"><color rgba="0.85 0.85 0.90 0.55"/></material>
@@ -50,8 +93,9 @@
   <material name="yellow"> <color rgba="0.95 0.80 0.10 1.0"/></material>
   <material name="blue">   <color rgba="0.15 0.35 0.85 1.0"/></material>
   <material name="green">  <color rgba="0.20 0.70 0.30 1.0"/></material>
+  <material name="red">    <color rgba="0.80 0.15 0.15 1.0"/></material>
+  <material name="grey">   <color rgba="0.45 0.45 0.48 1.0"/></material>
 
-  <!-- Wheels are identical apart from placement -->
   <xacro:macro name="wheel" params="name x y">
     <link name="wheel_${name}_link">
       <visual>
@@ -59,8 +103,11 @@
         <geometry><cylinder radius="${wheel_radius}" length="${wheel_width}"/></geometry>
         <material name="yellow"/>
       </visual>
+      <xacro:cylinder_inertial mass="${wheel_mass}" radius="${wheel_radius}"
+                               length="${wheel_width}">
+        <origin rpy="${PI/2} 0 0"/>
+      </xacro:cylinder_inertial>
     </link>
-    <!-- continuous: wheels spin freely, no limit -->
     <joint name="wheel_${name}_joint" type="continuous">
       <parent link="base_link"/>
       <child  link="wheel_${name}_link"/>
@@ -70,7 +117,6 @@
   </xacro:macro>
 
   <!-- ===================== chassis ===================== -->
-  <!-- base_footprint sits on the ground: the frame Nav2 drives around. -->
   <link name="base_footprint"/>
 
   <joint name="base_joint" type="fixed">
@@ -84,6 +130,10 @@
       <geometry><box size="${chassis_len} ${chassis_wid} ${chassis_thick}"/></geometry>
       <material name="acrylic"/>
     </visual>
+    <xacro:box_inertial mass="${chassis_mass}" x="${chassis_len}"
+                        y="${chassis_wid}" z="${chassis_thick}">
+      <origin xyz="0 0 0"/>
+    </xacro:box_inertial>
   </link>
 
   <xacro:wheel name="front_left"  x="${wheel_x}"  y="${wheel_y}"/>
@@ -91,13 +141,54 @@
   <xacro:wheel name="rear_left"   x="${-wheel_x}" y="${wheel_y}"/>
   <xacro:wheel name="rear_right"  x="${-wheel_x}" y="${-wheel_y}"/>
 
+  <!-- ===================== electronics + power =====================
+       Placement is approximate — see the warning at the top. What matters
+       for the mass question is that these are ON the robot and roughly
+       where they sit fore/aft and how high.
+  -->
+  <!-- AA pack slung under the chassis, as on the real bot -->
+  <xacro:payload name="drive_battery" parent="base_link" mass="${m_drive_batt}"
+                 x="0.060" y="0.055" z="0.030"
+                 px="-0.030" py="0" pz="-0.020" colour="red"/>
+
+  <xacro:payload name="pi" parent="base_link" mass="${m_pi}"
+                 x="0.065" y="0.030" z="0.012"
+                 px="-0.050" py="0.040" pz="${deck + 0.008}" colour="green"/>
+
+  <xacro:payload name="l9110s" parent="base_link" mass="${m_l9110s}"
+                 x="0.030" y="0.022" z="0.008"
+                 px="-0.070" py="-0.045" pz="${deck + 0.006}" colour="blue"/>
+
+  <xacro:payload name="pca9685" parent="base_link" mass="${m_pca9685}"
+                 x="0.062" y="0.026" z="0.008"
+                 px="0.010" py="-0.045" pz="${deck + 0.006}" colour="blue"/>
+
+  <xacro:payload name="usb_hub" parent="base_link" mass="${m_usb_hub}"
+                 x="0.070" y="0.028" z="0.012"
+                 px="-0.070" py="0" pz="${deck + 0.008}" colour="grey"/>
+
+  <!-- Heavy items ride on the upper tier — this is what lifts the CoG -->
+  <xacro:payload name="power_bank" parent="base_link" mass="${m_power_bank}"
+                 x="0.100" y="0.070" z="0.025"
+                 px="-0.030" py="0" pz="${deck2}" colour="black"/>
+
+  <xacro:payload name="servo_battery" parent="base_link" mass="${m_servo_batt}"
+                 x="0.075" y="0.045" z="0.028"
+                 px="0.030" py="0.040" pz="${deck2}" colour="green"/>
+
+  <xacro:payload name="speakerphone" parent="base_link" mass="${m_speaker}"
+                 x="0.090" y="0.090" z="0.030"
+                 px="-0.020" py="0" pz="${deck2 + 0.030}" colour="black"/>
+
   <!-- ===================== ultrasonic ===================== -->
-  <!-- HC-SR04, forward-facing. ros_bridge publishes sensor_msgs/Range here. -->
   <link name="ultrasonic_link">
     <visual>
       <geometry><box size="0.010 0.045 0.020"/></geometry>
       <material name="blue"/>
     </visual>
+    <xacro:box_inertial mass="${m_ultrasonic}" x="0.010" y="0.045" z="0.020">
+      <origin xyz="0 0 0"/>
+    </xacro:box_inertial>
   </link>
   <joint name="ultrasonic_joint" type="fixed">
     <parent link="base_link"/>
@@ -106,18 +197,20 @@
   </joint>
 
   <!-- ===================== arm ===================== -->
-  <!-- Mounted toward the front of the plate, as on the real robot. -->
   <link name="arm_base_link">
     <visual>
       <origin xyz="0 0 ${arm_base_h/2}"/>
       <geometry><box size="0.055 0.055 ${arm_base_h}"/></geometry>
       <material name="black"/>
     </visual>
+    <xacro:box_inertial mass="${m_arm_base}" x="0.055" y="0.055" z="${arm_base_h}">
+      <origin xyz="0 0 ${arm_base_h/2}"/>
+    </xacro:box_inertial>
   </link>
   <joint name="arm_mount_joint" type="fixed">
     <parent link="base_link"/>
     <child  link="arm_base_link"/>
-    <origin xyz="0.040 0 ${chassis_thick/2}"/>
+    <origin xyz="0.040 0 ${deck}"/>
   </joint>
 
   <!-- ch 0: base — yaw. Centre 90 deg, so +/- 90 deg of travel. -->
@@ -127,6 +220,9 @@
       <geometry><box size="0.050 0.050 0.040"/></geometry>
       <material name="black"/>
     </visual>
+    <xacro:box_inertial mass="${m_shoulder}" x="0.050" y="0.050" z="0.040">
+      <origin xyz="0 0 0.020"/>
+    </xacro:box_inertial>
   </link>
   <joint name="base" type="revolute">
     <parent link="arm_base_link"/>
@@ -144,6 +240,9 @@
       <geometry><box size="0.030 0.040 ${upper_arm_len}"/></geometry>
       <material name="black"/>
     </visual>
+    <xacro:box_inertial mass="${m_upper_arm}" x="0.030" y="0.040" z="${upper_arm_len}">
+      <origin xyz="0 0 ${upper_arm_len/2}"/>
+    </xacro:box_inertial>
   </link>
   <joint name="shoulder" type="revolute">
     <parent link="shoulder_link"/>
@@ -160,6 +259,9 @@
       <geometry><box size="0.028 0.036 ${forearm_len}"/></geometry>
       <material name="black"/>
     </visual>
+    <xacro:box_inertial mass="${m_forearm}" x="0.028" y="0.036" z="${forearm_len}">
+      <origin xyz="0 0 ${forearm_len/2}"/>
+    </xacro:box_inertial>
   </link>
   <joint name="elbow" type="revolute">
     <parent link="upper_arm_link"/>
@@ -176,6 +278,9 @@
       <geometry><box size="0.026 0.032 ${wrist_len}"/></geometry>
       <material name="black"/>
     </visual>
+    <xacro:box_inertial mass="${m_wrist}" x="0.026" y="0.032" z="${wrist_len}">
+      <origin xyz="0 0 ${wrist_len/2}"/>
+    </xacro:box_inertial>
   </link>
   <joint name="wrist" type="revolute">
     <parent link="forearm_link"/>
@@ -193,6 +298,9 @@
       <geometry><cylinder radius="0.018" length="0.030"/></geometry>
       <material name="black"/>
     </visual>
+    <xacro:cylinder_inertial mass="${m_wrist_rot}" radius="0.018" length="0.030">
+      <origin xyz="0 0 0.015"/>
+    </xacro:cylinder_inertial>
   </link>
   <joint name="wrist_rotate" type="revolute">
     <parent link="wrist_link"/>
@@ -202,14 +310,16 @@
     <limit lower="${-PI/2}" upper="${PI/2}" effort="10" velocity="1.0"/>
   </joint>
 
-  <!-- ch 5: gripper — the claw. One revolute joint stands in for the linkage;
-       real fingers are a mechanism driven by a single servo. -->
+  <!-- ch 5: gripper — the claw. -->
   <link name="gripper_link">
     <visual>
       <origin xyz="0 0 ${gripper_len/2}"/>
       <geometry><box size="0.020 0.060 ${gripper_len}"/></geometry>
       <material name="green"/>
     </visual>
+    <xacro:box_inertial mass="${m_gripper}" x="0.020" y="0.060" z="${gripper_len}">
+      <origin xyz="0 0 ${gripper_len/2}"/>
+    </xacro:box_inertial>
   </link>
   <joint name="gripper" type="revolute">
     <parent link="wrist_rotate_link"/>
@@ -220,14 +330,14 @@
   </joint>
 
   <!-- ===================== camera ===================== -->
-  <!-- IMX219 rides on the wrist, looking along the gripper. Mounted upside
-       down on the real robot (see FLIP_180 in the camera scripts) — that's a
-       driver-side fix, so this frame is the corrected, right-way-up view. -->
   <link name="camera_link">
     <visual>
       <geometry><box size="0.010 0.025 0.024"/></geometry>
       <material name="blue"/>
     </visual>
+    <xacro:box_inertial mass="${m_camera}" x="0.010" y="0.025" z="0.024">
+      <origin xyz="0 0 0"/>
+    </xacro:box_inertial>
   </link>
   <joint name="camera_joint" type="fixed">
     <parent link="wrist_rotate_link"/>
@@ -235,7 +345,6 @@
     <origin xyz="0.025 0 0.020" rpy="0 0 0"/>
   </joint>
 
-  <!-- ROS camera convention: z forward, x right, y down -->
   <link name="camera_optical_frame"/>
   <joint name="camera_optical_joint" type="fixed">
     <parent link="camera_link"/>

@@ -105,6 +105,50 @@ interface (`/cmd_vel` in, tf + joint states out), which is precisely what Nav2
 and a real-robot bridge speak. Real physics would mean Gazebo, which needs
 inertia and collision on every link plus a diff-drive plugin.
 
+## Why he barely moves — what the model says
+
+```bash
+ros2 run melvinn_description mass_report.py
+```
+
+The URDF carries real masses for every component, so it can be asked how heavy
+MELVINN is and whether the drivetrain has any margin. The answer:
+
+```
+TOTAL                       2.01 kg
+Centre of gravity      x +0.003   z +0.115 m
+
+rolling      (Crr 0.03)   needs  4.8 mN-m/wheel   TT gives 7.8-11.8  -> x1.6-2.4  OK
+BREAKAWAY    (Crr 0.12)   needs 19.3 mN-m/wheel   TT gives 7.8-11.8  -> x0.4-0.6  NOT ENOUGH
+```
+
+**That is exactly the observed behaviour.** Rolling has margin, breakaway
+doesn't — so once moving he keeps moving, but he cannot start from rest. It
+predicts the jabbing that `ROCK_START` does (brief pulses momentarily beat
+static friction), why `rock_test.py` needed several attempts, and why the
+verdict was "it moves, but slowly". The model was built from part specs, not
+fitted to the symptom, and it lands on the same failure mode.
+
+And those motor figures are *optimistic*: they assume stall torque at a full
+6 V with all four wheels pulling. In reality two motors share each L9110S
+channel and the alkaline pack sags under load, so delivered torque is a
+fraction of that.
+
+**The surprise: it isn't mainly the arm.** The whole 6-DOF arm is 525 g, 26% of
+the robot. The single heaviest item is the **power bank at 350 g** — 17% on its
+own, more than any arm segment. Power bank + speakerphone + servo battery is
+750 g, 37% of the mass, and all three sit high on the upper tier, which is what
+puts the centre of gravity 11.5 cm up on a robot whose wheels are 3.25 cm in
+radius. Fore/aft balance is fine (x +3 mm, essentially centred).
+
+So "it got heavy when I added the arm" is only a third of the story — the
+accumulated electronics outweigh it.
+
+Caveats worth stating: masses are spec/typical values, not weighed, and the
+rolling-resistance coefficients are estimates, so the exact crossover point is
+soft. What's robust is the *ratio* — breakaway resistance always runs several
+times rolling — and that's what puts breakaway underwater while rolling is fine.
+
 ## Not done yet
 
 - **Bridging to the real robot** — nothing here talks to the Pi. That needs a

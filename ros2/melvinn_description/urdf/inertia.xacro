@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<!--
+  Inertia helpers.
+
+  A URDF link with no <inertial> block is invisible to any physics or
+  mass analysis — it renders in RViz and weighs nothing. These macros
+  attach a mass and a matching inertia tensor so the model can be used
+  to compute total weight and centre of gravity.
+
+  The tensors are the standard rigid-body formulas for a uniform box and
+  cylinder. Real parts aren't uniform, so treat the tensors as
+  approximate; the MASSES are the numbers that matter for the weight
+  question, and those are measured/spec values where known.
+-->
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!-- Solid box about its centre -->
+  <xacro:macro name="box_inertial" params="mass x y z *origin">
+    <inertial>
+      <xacro:insert_block name="origin"/>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${mass * (y*y + z*z) / 12.0}" ixy="0" ixz="0"
+        iyy="${mass * (x*x + z*z) / 12.0}" iyz="0"
+        izz="${mass * (x*x + y*y) / 12.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!-- Solid cylinder about its centre, axis along z -->
+  <xacro:macro name="cylinder_inertial" params="mass radius length *origin">
+    <inertial>
+      <xacro:insert_block name="origin"/>
+      <mass value="${mass}"/>
+      <inertia
+        ixx="${mass * (3*radius*radius + length*length) / 12.0}" ixy="0" ixz="0"
+        iyy="${mass * (3*radius*radius + length*length) / 12.0}" iyz="0"
+        izz="${mass * radius * radius / 2.0}"/>
+    </inertial>
+  </xacro:macro>
+
+  <!--
+    A component that's just dead weight bolted to the chassis — battery,
+    Pi, speakerphone. One macro makes a link with visual + mass and fixes
+    it to a parent, since we have a lot of these.
+  -->
+  <xacro:macro name="payload" params="name parent mass x y z px py pz colour">
+    <link name="${name}_link">
+      <visual>
+        <geometry><box size="${x} ${y} ${z}"/></geometry>
+        <material name="${colour}"/>
+      </visual>
+      <xacro:box_inertial mass="${mass}" x="${x}" y="${y}" z="${z}">
+        <origin xyz="0 0 0"/>
+      </xacro:box_inertial>
+    </link>
+    <joint name="${name}_joint" type="fixed">
+      <parent link="${parent}"/>
+      <child  link="${name}_link"/>
+      <origin xyz="${px} ${py} ${pz}"/>
+    </joint>
+  </xacro:macro>
+
+</robot>
