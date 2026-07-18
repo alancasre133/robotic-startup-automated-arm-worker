@@ -1724,6 +1724,12 @@ EFFECTS = {
     "cave":       "reverb 92 100 100 pitch -80",               # big echoey cave
     "space":      "chorus 0.7 0.9 55 0.4 0.25 2 -t reverb 60 pitch -60",
     "drunk":      "speed 0.9 chorus 0.6 0.9 50 0.4 0.25 2 -t",  # wobbly
+    # Rocky, the Eridian from Project Hail Mary. He has no vocal cords as we'd
+    # know them -- he talks in MUSICAL CHORDS, several notes sounding at once,
+    # heard through the wall of his high-pressure tunnel. Three detuned chorus
+    # voices stack harmonics over the speech to fake the chord, the pitch drop
+    # gives it body, and the reverb puts it back in the tunnel.
+    "rocky":      "pitch -150 chorus 0.5 0.8 45 0.5 0.25 2 -t 55 0.45 0.35 2.5 -t 65 0.4 0.45 3 -t reverb 50",
 }
 _effect = os.environ.get("MELVINN_EFFECT", "none")
 
