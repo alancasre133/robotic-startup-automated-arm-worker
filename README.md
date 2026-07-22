@@ -31,7 +31,7 @@ Each step links to the details further down (or to a file in the repo):
 4. **Get the code onto the Pi** — see **Get the Code (git)**
 5. **Install software** — see **Software Setup**: `bash setup.sh`
 6. **Boot config** — match [config/config.txt](config/config.txt); apply steps in **Camera (IMX219)**
-7. **Wire + test motors** — see **Motors (L9110S)**, then `python3 robot_code/tests/motor_test.py`
+7. **Wire + test motors** — see **Wiring reference → Drive**, then `python3 robot_code/tests/bts7960_test.py`
 8. **Test the camera** — see **Camera (IMX219)**, then `python3 robot_code/tests/camera_test.py`
 9. **Stream the camera live** — `python3 robot_code/tests/camera_stream.py`, then open `http://<pi-ip>:8000`
 10. **View from anywhere + auto-start on boot** — Tailscale + a systemd service: [docs/remote-access.md](docs/remote-access.md)
@@ -326,7 +326,104 @@ See [HARDWARE.md](HARDWARE.md) for the full parts list and wiring diagram, and
 
 ---
 
-## Motors (L9110S)
+## Wiring reference
+
+Every component's Pi connections, one table each. Pin numbers are **physical
+pin positions (1–40)**; GPIO is the BCM number. See [docs/pi3-pinout.png](docs/pi3-pinout.png)
+for the pinout, or [HARDWARE.md](HARDWARE.md) for the parts list and diagram.
+
+### Drive — 4WD (2× BTS7960)
+
+Four TT motors, one BTS7960 per side, that side's two motors paralleled onto
+it. Replaced the single L9110S (which overheated at ~3× its channel rating).
+Reuses the freed-up L9110S GPIO as direction inputs; `gpiozero`'s
+`Motor(forward, backward)` drives RPWM/LPWM directly.
+
+| BTS7960 pin | Pi pin | GPIO / to |
+|-------------|--------|-----------|
+| Left  RPWM | 36 | GPIO16 |
+| Left  LPWM | 38 | GPIO20 |
+| Right RPWM | 13 | GPIO27 |
+| Right LPWM | 15 | GPIO22 |
+| VCC + R_EN + L_EN (both boards) | 1 / 17 | 3.3V (logic, always enabled) |
+| GND (both boards) | 6 / 9 | ground reference |
+
+Motor power (⚠️ separate from the 3.3V logic — never mix): `NiMH + → [7.5A
+fuse] → 14 AWG → both boards' B+`, `NiMH − → both B−`, each board's `M+/M− →
+that side's two motors`. Use the **NiMH**, not the AA pack (sags below the
+BTS7960's 5.5V floor). Test: `python3 robot_code/tests/bts7960_test.py`.
+
+### Robotic arm (PCA9685, I²C)
+
+Six MG996R servos on a PCA9685, driven over I²C.
+
+| PCA9685 pin | Pi pin | GPIO / to |
+|-------------|--------|-----------|
+| VCC | 1  | 3.3V (logic) |
+| GND | 20 | ground reference |
+| SDA | 3  | GPIO2 (I²C data) |
+| SCL | 5  | GPIO3 (I²C clock) |
+| V+  | —  | 6V NiMH servo pack — **not** the Pi |
+
+Servo channels 0–5 (`ARM_JOINTS` order): `base, shoulder, elbow, wrist,
+wrist_rotate, gripper`. Test: `python3 robot_code/tests/arm_test.py`.
+
+### Obstacle sensing (HC-SR04)
+
+Ultrasonic distance sensor. Echo is 5V, so it goes through a 1kΩ/2kΩ divider
+to protect the 3.3V GPIO.
+
+| HC-SR04 pin | Pi pin | GPIO / to |
+|-------------|--------|-----------|
+| VCC  | 2  | 5V |
+| GND  | 34 | ground reference |
+| Trig | 33 | GPIO13 |
+| Echo | 35 | GPIO19 — **through the divider**, not direct |
+
+Divider: `Echo → 1kΩ → pin 35`, then `pin 35 → 2kΩ → GND (pin 39)`.
+Test: `python3 robot_code/tests/obstacle_avoid.py`.
+
+### Face screen (ST7789, SPI)
+
+2.0" IPS display for MELVINN's animated face, over SPI. Pin assignment below
+(CS/DC/RST are the planned free GPIO — adjust the code constants if you wire
+them elsewhere).
+
+| ST7789 pin | Pi pin | GPIO / to |
+|------------|--------|-----------|
+| VCC | 17 | 3.3V (⚠️ not 5V) |
+| GND | 25 | ground reference |
+| SDA (MOSI) | 19 | GPIO10 |
+| SCL (SCLK) | 23 | GPIO11 |
+| CS  | 24 | GPIO8 (CE0) |
+| DC  | 18 | GPIO24 |
+| RST | 22 | GPIO25 |
+
+### Camera (IMX219)
+
+Not a GPIO device — the IMX219 connects via the **CSI camera ribbon** to the
+dedicated CSI connector (not the look-alike DSI/display one). Config + tests
+in the [Camera (IMX219)](#camera-imx219) section below.
+
+### USB + power (no GPIO)
+
+The Pi 3A+ has one USB-A data port + one micro-USB power port.
+
+| Item | Connects to |
+|------|-------------|
+| Power bank (Redmi 20000mAh) | Pi **micro-USB power in** (power only) |
+| USB hub (Jeeyee 4-port) | Pi **USB-A** (data) |
+| Speakerphone (Techwolf) | USB hub |
+| Pico (RP2040) | USB hub |
+
+**Gotcha — WiFi drops when motors run:** if motor return current flows through
+the Pi, the surge can knock WiFi offline (SSH "connection reset"). Keep motor
+current out of the Pi — join battery **−** directly to the driver **GND**, and
+run only a thin reference wire from driver GND to the Pi's pin 6/9. Never put
+battery negative on a Pi GPIO pin.
+
+<details>
+<summary>Previous single-driver setup — L9110S (superseded by the BTS7960s)</summary>
 
 Two DC motors driven from the Pi GPIO through an L9110S dual H-bridge.
 
@@ -339,19 +436,9 @@ Two DC motors driven from the Pi GPIO through an L9110S dual H-bridge.
 | GND  | 6  | (ground reference) |
 
 Power: battery **+** → L9110S **VCC**; battery **−** → L9110S **GND**.
-The Pi is powered separately by a USB power bank.
+Test: `python3 robot_code/tests/motor_test.py`.
 
-Test (wheels off the ground):
-
-```bash
-python3 robot_code/tests/motor_test.py
-```
-
-**Gotcha — WiFi drops when motors run:** if the motor return current flows
-through the Pi, the surge can knock the WiFi offline (SSH "connection reset").
-Keep motor current out of the Pi — join battery **−** directly to the L9110S
-**GND**, and run only a thin reference wire from L9110S GND to the Pi's pin 6.
-Do **not** put the battery negative on a Pi GPIO pin.
+</details>
 
 ---
 
