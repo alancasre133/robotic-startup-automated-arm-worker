@@ -3,8 +3,9 @@ Robot wheel jog test — nudge each motor live with the arrow keys.
 
 Like arm_jog_test.py, but for the drive motors: pick a motor with Enter/b,
 then pulse it forward or backward with the arrow keys and watch which wheel
-spins which way. Uses the SAME motor_a/motor_b objects assistant.py drives,
-so what you see here is exactly what voice/typed drive commands will do too.
+spins which way. Uses the SAME left/right motor objects assistant.py drives
+(one BTS7960 per side, that side's two wheels paralleled onto it), so what you
+see here is exactly what voice/typed drive commands will do too.
 
 Controls:
     RIGHT          pulse the current motor FORWARD for PULSE_SECS
@@ -26,7 +27,7 @@ from time import sleep
 from assistant import _ensure_motors  # reuse the real motor objects
 
 PULSE_SECS = 0.4
-MOTOR_NAMES = ("Motor A", "Motor B")
+MOTOR_NAMES = ("Left side", "Right side")
 
 
 def run(stdscr):
@@ -34,8 +35,8 @@ def run(stdscr):
     stdscr.keypad(True)
     stdscr.nodelay(False)
 
-    motor_a, motor_b = _ensure_motors()
-    motors = (motor_a, motor_b)
+    motor_left, motor_right = _ensure_motors()
+    motors = (motor_left, motor_right)
 
     idx = 0
     last_action = "(none yet)"
@@ -68,8 +69,8 @@ def run(stdscr):
         elif key in (ord("q"), ord("Q")):
             break
 
-    motor_a.stop()
-    motor_b.stop()
+    motor_left.stop()
+    motor_right.stop()
     stdscr.clear()
     stdscr.addstr(0, 0, "Done. Report which wheel moved and which way for each motor/direction.")
     stdscr.addstr(2, 0, "Press any key to exit.")
@@ -84,10 +85,10 @@ if __name__ == "__main__":
         pass
     finally:
         try:
-            from assistant import motor_a, motor_b
-            if motor_a is not None:
-                motor_a.stop()
-            if motor_b is not None:
-                motor_b.stop()
+            from assistant import motor_left, motor_right
+            if motor_left is not None:
+                motor_left.stop()
+            if motor_right is not None:
+                motor_right.stop()
         except Exception:
             pass

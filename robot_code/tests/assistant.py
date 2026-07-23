@@ -59,7 +59,7 @@ import threading
 from time import sleep
 from glob import glob
 
-from gpiozero import Motor, OutputDevice
+from gpiozero import Motor
 
 try:
     import anthropic
@@ -97,46 +97,22 @@ if anthropic is not None and os.environ.get("ANTHROPIC_API_KEY"):
         client = None
 
 # ---------------------------------------------------------------------------
-# Hardware — motors
+# Hardware — motors (4WD, one BTS7960 per side)
 # ---------------------------------------------------------------------------
-# TEMPORARY WORKAROUND: Motor A's A-1A wire (GPIO16 -> L9110S A-1A) is loose or
-# disconnected — motor_diag.py showed that input floats HIGH no matter what the
-# Pi drives it to, so Motor A can only go FORWARD or STOP; it can't reverse.
-# (forward / right / spin / stop only ever ask Motor A to go forward or stop,
-# so those are unaffected — only backward/left, which need Motor A to reverse.)
-# Reseat the GPIO16 <-> A-1A jumper, confirm with motor_diag.py, then set this
-# back to False to return to normal two-direction control.
-MOTOR_A_FORWARD_ONLY = True
-
-
-class _ForwardOnlyMotor:
-    """Drop-in for gpiozero's Motor when only GPIO20 (A-1B) actually works.
-
-    Drives GPIO20 directly: LOW = spin forward, HIGH = stop/brake. backward()
-    can't truly reverse, so it just stops this side — the robot pivots around
-    the stopped wheel instead of turning symmetrically or backing up straight.
-    """
-
-    def __init__(self, pin):
-        self._pin = OutputDevice(pin)
-        self._pin.on()  # start stopped
-
-    def forward(self, speed=1):
-        self._pin.off()
-
-    def backward(self, speed=1):
-        self._pin.on()  # can't reverse — stop this side instead
-
-    def stop(self):
-        self._pin.on()
-
-
-motor_a = motor_b = None
+# Two BTS7960 boards replaced the single L9110S, which overheated at ~3x its
+# channel rating and left the bot too torque-starved to start from rest. Each
+# board drives that side's two motors in parallel; gpiozero's Motor(forward,
+# backward) maps straight onto the boards' RPWM/LPWM direction inputs.
+# Wiring lives in README "Wiring reference -> Drive"; bring-up is bts7960_test.py.
+motor_left = motor_right = None
 _music_proc = None          # currently playing mpg123 process
 
 # Jab the motors a few times before steady drive to break static friction on a
-# heavy/top-heavy bot. Set False if the bot moves fine and you want instant, quiet starts.
-ROCK_START = True
+# heavy/top-heavy bot. Needed on the L9110S, where breakaway torque was ~0.4-0.6x
+# what the chassis demanded; the BTS7960s deliver enough to start from rest
+# directly, so this is off and starts are instant and quiet. Set True again if
+# the bot ever struggles to break loose (heavier payload, worn battery).
+ROCK_START = False
 # One round of jabbing isn't always enough at this weight -- confirmed on-device,
 # it sometimes took several manual re-runs of rock_test.py before it broke loose.
 # Automate that instead of making the user relaunch the script repeatedly.
@@ -144,38 +120,28 @@ ROCK_ROUNDS = 3
 
 
 def _ensure_motors():
-    global motor_a, motor_b
-    if motor_a is None:
-        motor_a = _ForwardOnlyMotor(20) if MOTOR_A_FORWARD_ONLY else Motor(forward=16, backward=20, pwm=False)
-        motor_b = Motor(forward=27, backward=22, pwm=False)
-    return motor_a, motor_b
-
-
-# WORKAROUND: motor A's A-1A wire (GPIO16) is loose/disconnected, so motor A
-# can only go forward or stop — it can never reverse (see motor_diag.py results:
-# GPIO16 has no effect; A only responds to A2/GPIO20 as forward-vs-stop). Until
-# that wire is reseated, any move needing a.backward() is downgraded to a.stop(),
-# turning a full two-wheel spin into a one-wheel pivot. Set this to False (or
-# delete the substitution below) once the wire is fixed.
-MOTOR_A_A1A_STUCK = True
+    global motor_left, motor_right
+    if motor_left is None:
+        motor_left = Motor(forward=16, backward=20, pwm=False)
+        motor_right = Motor(forward=27, backward=22, pwm=False)
+    return motor_left, motor_right
 
 
 def robot_drive(direction: str, seconds: float = 1.0) -> str:
     if direction == "stop":
-        if motor_a is not None:
-            motor_a.stop()
-            motor_b.stop()
+        if motor_left is not None:
+            motor_left.stop()
+            motor_right.stop()
         return "Stopped."
     if direction not in ("forward", "backward", "left", "right", "spin"):
         return f"Unknown direction: {direction}"
-    a, b = _ensure_motors()
-    a_backward = a.stop if MOTOR_A_A1A_STUCK else a.backward
+    left, right = _ensure_motors()
     moves = {
-        "forward":  (a.forward,  b.forward),
-        "backward": (a_backward, b.backward),   # pivot on A, not a true reverse (see workaround above)
-        "left":     (a_backward, b.forward),    # pivot on A, wider turn than a full spin
-        "right":    (a.forward,  b.backward),
-        "spin":     (a.forward,  b.backward),   # full spin (right motors fwd, left bwd)
+        "forward":  (left.forward,  right.forward),
+        "backward": (left.backward, right.backward),
+        "left":     (left.backward, right.forward),   # counter-rotate to port
+        "right":    (left.forward,  right.backward),  # counter-rotate to starboard
+        "spin":     (left.forward,  right.backward),  # same as right, kept as its own verb
     }
     left_fn, right_fn = moves[direction]
 
@@ -192,8 +158,8 @@ def robot_drive(direction: str, seconds: float = 1.0) -> str:
                 left_fn()
                 right_fn()
                 sleep(0.12)
-                a.stop()
-                b.stop()
+                left.stop()
+                right.stop()
                 sleep(0.06)
             if _round < ROCK_ROUNDS - 1:
                 sleep(0.25)  # let it settle before the next round
@@ -202,12 +168,9 @@ def robot_drive(direction: str, seconds: float = 1.0) -> str:
     right_fn()
     secs = min(seconds, 5)
     sleep(secs)
-    a.stop()
-    b.stop()
-    note = " (pivot, not a full turn — motor A's reverse wire is loose)" if (
-        MOTOR_A_A1A_STUCK and direction in ("backward", "left")
-    ) else ""
-    return f"Drove {direction} for {secs} seconds.{note}"
+    left.stop()
+    right.stop()
+    return f"Drove {direction} for {secs} seconds."
 
 
 # ---------------------------------------------------------------------------
@@ -607,9 +570,8 @@ def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
                     speak("I can't judge the distance, doing a blind grab.")
                     break
                 if d <= ARM_REACH_CM:
-                    # In reach. We don't back off when very close: Motor A can't
-                    # reverse right now (loose A-1A wire — MOTOR_A_A1A_STUCK), so
-                    # "backward" would pivot and lose the object. Grab from here.
+                    # In reach — grab from here rather than backing off to a
+                    # nominal distance, which risks losing sight of the object.
                     speak("In reach.")
                     break
                 via = "" if source == "ultrasonic" else " by camera"
@@ -677,14 +639,14 @@ def _release_hardware() -> None:
     gpiozero devices hold their pins exclusively — if we kept them, the child
     would die with 'GPIO busy'. Everything re-inits lazily on next use here.
     """
-    global motor_a, motor_b, _distance_sensor
-    for dev in (motor_a, motor_b, _distance_sensor):
+    global motor_left, motor_right, _distance_sensor
+    for dev in (motor_left, motor_right, _distance_sensor):
         try:
             if dev is not None:
                 dev.close()
         except Exception:
             pass
-    motor_a = motor_b = None
+    motor_left = motor_right = None
     _distance_sensor = None
     _close_camera()
 
@@ -2102,10 +2064,10 @@ def main() -> None:
         pass
     finally:
         _stop_music()
-        if motor_a is not None:
-            motor_a.stop()
-        if motor_b is not None:
-            motor_b.stop()
+        if motor_left is not None:
+            motor_left.stop()
+        if motor_right is not None:
+            motor_right.stop()
         print("\nbye")
 
 

@@ -45,7 +45,7 @@ apt_install python3-pip
 
 echo
 echo "==> Installing motor control libraries (gpiozero + lgpio)..."
-# Used by robot_code/tests/motor_test.py to drive the L9110S from the Pi GPIO.
+# Used by robot_code/tests/bts7960_test.py to drive the two BTS7960s from the Pi GPIO.
 apt_install python3-gpiozero python3-lgpio
 
 echo
@@ -293,7 +293,7 @@ fi
 echo
 echo "After reboot:"
 echo "  - Verify the camera:  rpicam-hello --list-cameras   (should list imx219)"
-echo "  - Test the motors:    python3 robot_code/tests/motor_test.py   (wheels off the ground)"
+echo "  - Test the motors:    python3 robot_code/tests/bts7960_test.py   (wheels off the ground)"
 echo "  - Verify the arm:     i2cdetect -y 1   (should show address 40)"
 echo "  - Test the arm:       python3 robot_code/tests/arm_test.py   (arm free to move)"
 echo "  - Run the assistant:  python3 robot_code/tests/assistant.py    (voice mode)"
