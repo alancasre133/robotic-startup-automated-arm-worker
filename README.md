@@ -334,10 +334,18 @@ for the pinout, or [HARDWARE.md](HARDWARE.md) for the parts list and diagram.
 
 ### Drive — 4WD (2× BTS7960)
 
-Four TT motors, one BTS7960 per side, that side's two motors paralleled onto
-it. Replaced the single L9110S (which overheated at ~3× its channel rating).
-Reuses the freed-up L9110S GPIO as direction inputs; `gpiozero`'s
+Four drive motors, one BTS7960 per side, that side's two motors paralleled
+onto it. Replaced the single L9110S (which overheated at ~3× its channel
+rating). Reuses the freed-up L9110S GPIO as direction inputs; `gpiozero`'s
 `Motor(forward, backward)` drives RPWM/LPWM directly.
+
+> **Motor upgrade in progress (Jul 2026):** the original TT motors are being
+> replaced with 4× **JGA25-370 6V 60 RPM** metal gearmotors (~10× the torque —
+> the TTs were torque-marginal at this chassis weight even on the BTS7960s).
+> Nothing electrical changes: same GPIO pins, same M+/M− buses, same fuse.
+> Mechanically each new motor uses a 25 mm clamp bracket, a 4 mm-bore brass
+> hex cople, and a 65 mm hex-socket wheel. Expect ~0.2 m/s cruise (60 RPM ×
+> 65 mm wheel) with instant starts — ROCK_START stays off.
 
 | BTS7960 pin | Pi pin | GPIO / to |
 |-------------|--------|-----------|
