@@ -1704,6 +1704,16 @@ EFFECTS = {
 }
 _effect = os.environ.get("MELVINN_EFFECT", "none")
 
+# --- MELVINN's SIGNATURE voice ---------------------------------------------
+# The default identity = a warm base Piper voice + a subtle SoX character, so
+# "melvinn" doesn't just sound like a stock model. Applied ONLY to the default
+# voice, and ONLY when no explicit effect is chosen (so "add a monster effect"
+# still overrides it, and picking a named voice like 'joe' turns it off).
+# Tune with the env vars; set MELVINN_SIGNATURE_FX="" to disable the signature.
+SIGNATURE_VOICE = os.environ.get("MELVINN_SIGNATURE_VOICE", "joe")   # base timbre
+SIGNATURE_FX = os.environ.get(
+    "MELVINN_SIGNATURE_FX", "pitch -90 chorus 0.7 0.9 40 0.25 0.25 2 -t")
+
 
 def set_effect(name: str) -> str:
     """Layer a SoX character effect over whatever voice is selected."""
@@ -1727,6 +1737,10 @@ def set_effect(name: str) -> str:
 def _play_wav(wav: str) -> None:
     """Play a wav, first running it through the active SoX effect if one is set."""
     chain = EFFECTS.get(_effect, "")
+    # MELVINN's signature: the default voice gets its subtle character effect,
+    # unless the user picked an explicit effect (which takes over).
+    if _voice == "melvinn" and _effect == "none":
+        chain = SIGNATURE_FX
     if chain and shutil.which("sox"):
         out = None
         try:
@@ -1802,8 +1816,12 @@ def _say_piper(text: str) -> bool:
     # Piper only speaks the default voice (one .onnx model). Named presets
     # fall through to espeak-ng, which can actually change voice on the fly.
     # (Drop more models in ~/piper/<name>.onnx to give piper more voices.)
-    model = PIPER_MODEL if _voice == "melvinn" else \
-        os.path.expanduser(f"~/piper/{_voice}.onnx")
+    if _voice == "melvinn":
+        # Signature base timbre if it's installed, else the default voice.onnx.
+        sig = os.path.expanduser(f"~/piper/{SIGNATURE_VOICE}.onnx")
+        model = sig if os.path.exists(sig) else PIPER_MODEL
+    else:
+        model = os.path.expanduser(f"~/piper/{_voice}.onnx")
     if shutil.which("piper") is None or not os.path.exists(model):
         return False
     wav = None
