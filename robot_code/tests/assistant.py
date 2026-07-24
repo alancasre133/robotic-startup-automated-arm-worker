@@ -1711,8 +1711,11 @@ _effect = os.environ.get("MELVINN_EFFECT", "none")
 # still overrides it, and picking a named voice like 'joe' turns it off).
 # Tune with the env vars; set MELVINN_SIGNATURE_FX="" to disable the signature.
 SIGNATURE_VOICE = os.environ.get("MELVINN_SIGNATURE_VOICE", "joe")   # base timbre
+# Warm, human, NOT robotic: boost the low end for warmth, gently soften the
+# highs, and add a touch of natural room. No chorus/pitch-shift -- those are
+# what make a voice sound synthetic.
 SIGNATURE_FX = os.environ.get(
-    "MELVINN_SIGNATURE_FX", "pitch -90 chorus 0.7 0.9 40 0.25 0.25 2 -t")
+    "MELVINN_SIGNATURE_FX", "bass +4 treble -1 reverb 12")
 
 
 def set_effect(name: str) -> str:
