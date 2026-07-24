@@ -34,16 +34,15 @@ PAUSE = 1.5   # seconds per move
 
 
 def step(label, action):
-    print(f"-> {label}")
+    input(f"\nENTER to run -> {label} ")
     action()
     sleep(PAUSE)
     left.stop()
     right.stop()
-    sleep(0.5)
 
 
 try:
-    print("BTS7960 4WD test. Wheels OFF the ground. Ctrl-C to stop.\n")
+    print("BTS7960 4WD test. Wheels OFF the ground. Ctrl-C to stop.")
 
     step("LEFT forward   (both left wheels toward the front?)",  left.forward)
     step("LEFT backward  (both left wheels reverse?)",           left.backward)
