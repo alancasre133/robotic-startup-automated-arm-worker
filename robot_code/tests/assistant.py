@@ -62,6 +62,12 @@ from glob import glob
 from gpiozero import Motor
 
 try:
+    from melvinn_voice import chirp          # MELVINN's little tone language
+except Exception:
+    def chirp(_name):                        # no-op if unavailable (e.g. no sox)
+        return False
+
+try:
     import anthropic
 except ImportError:
     anthropic = None
@@ -533,6 +539,7 @@ def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
     reasons between steps, using look_for_object / distance_ahead / drive /
     arm_pose / gripper (see the grab strategy in SYSTEM).
     """
+    chirp("search")         # MELVINN perks up and starts hunting
     speak(f"Okay, looking for a {color} object.")
     center_arm()            # start from the known centre (same as arm_jog_test.py)
     arm_pose("ready")
@@ -590,8 +597,10 @@ def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
 
             # 4. Verify — look where the object was. Still there = we missed.
             if _verify_grab(color, pre_area):
+                chirp("happy")     # MELVINN's proud little success trill
                 return "Got it." if attempt == 1 else f"Got it on try {attempt}."
             if attempt < GRAB_ATTEMPTS:
+                chirp("sad")       # aw — missed it
                 speak("I missed it. Trying again.")
                 gripper("open")            # release whatever we pinched
                 arm_pose("ready")          # clear the camera's view + reset
@@ -2040,6 +2049,7 @@ def main() -> None:
                         print(f"[sleeping — say '{WAKE_WORD.title()}']")
                         if not wait_for_wake():
                             continue
+                        chirp("wake")      # a bright "hm?" when it hears its name
                         speak("Yes?")
                     user_text = transcribe()
                 except RuntimeError as e:
