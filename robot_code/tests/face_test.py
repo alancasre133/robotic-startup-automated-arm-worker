@@ -1,13 +1,13 @@
 """
-ST7789 face screen bring-up -- color fills, then MELVINN's first eyes.
+ST7789 face screen test -- color fills, then MELVINN's first eyes.
 
-Wiring (README "Wiring reference -> Face screen"): SPI0 with CS on CE0
-(GPIO8), DC=GPIO24, RST=GPIO25, VCC on the shared 3.3V junction, BLK left
-unconnected. Enable SPI once with:  sudo raspi-config nonint do_spi 0
+Runs on the raw in-repo driver (st7789_raw.py): the Pimoroni st7789 lib
+never initialized this GMT020-02-7P panel, the bare datasheet sequence
+does. Wiring per README "Wiring reference -> Face screen".
 
-The 2.0" IPS panel is 320x240 (ST7789V). If the image comes out rotated or
-mirrored on your unit, adjust ROTATION below (0/90/180/270); if colors look
-inverted, toggle INVERT.
+If the image is upside down use ROTATION 270; if red/blue are swapped set
+BGR = True. If the screen stays blank, drop SPI_HZ (1_000_000 is the
+proven-safe floor from st7789_raw_test.py).
 
 Run:
     python3 robot_code/tests/face_test.py
@@ -15,38 +15,20 @@ Run:
 
 from time import sleep
 
-import st7789
 from PIL import Image, ImageDraw
 
-# The st7789 lib only allows ROTATION 0/180 with 320x240, and 90/270 with
-# 240x320 -- same physical landscape either way. If the image is upside
-# down try the other value in the pair; if it comes out portrait, switch
-# to the other WIDTH/HEIGHT + ROTATION combo.
-WIDTH = 320
-HEIGHT = 240
-ROTATION = 0
-INVERT = True     # most IPS ST7789 panels want inversion on
-# 10 MHz is reliable over Dupont jumpers; raise toward 60 MHz once the
-# panel is proven (blank-but-lit screens are usually speed or wiring).
-SPI_HZ = 10_000_000
+from st7789_raw import ST7789Raw
 
-disp = st7789.ST7789(
-    port=0,
-    cs=0,                 # CE0 = GPIO8 (pin 24)
-    dc=24,                # GPIO24 (pin 18)
-    rst=25,               # GPIO25 (pin 22)
-    backlight=None,       # BLK unconnected -- always on
-    width=WIDTH,
-    height=HEIGHT,
-    rotation=ROTATION,
-    invert=INVERT,
-    spi_speed_hz=SPI_HZ,
-)
+ROTATION = 90          # 90/270 = landscape 320x240, 0/180 = portrait
+SPI_HZ = 32_000_000    # raw init proven at 1 MHz; data usually fine much faster
+BGR = False            # True if red and blue come out swapped
+
+disp = ST7789Raw(rotation=ROTATION, spi_hz=SPI_HZ, bgr=BGR)
+WIDTH, HEIGHT = disp.width, disp.height
 
 
 def fill(color, seconds=1.5):
-    img = Image.new("RGB", (WIDTH, HEIGHT), color)
-    disp.display(img)
+    disp.display(Image.new("RGB", (WIDTH, HEIGHT), color))
     sleep(seconds)
 
 
@@ -81,4 +63,4 @@ eyes(pupil_dy=15)            # look down
 eyes(blink=True, seconds=0.15)
 eyes(seconds=2.0)            # and back
 
-print("Done. If rotated/mirrored tweak ROTATION; if colors are off toggle INVERT.")
+print("Done. Upside down -> ROTATION=270. Colors swapped -> BGR=True.")
