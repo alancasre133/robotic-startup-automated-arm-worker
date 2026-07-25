@@ -11,6 +11,7 @@ Run:
     python3 robot_code/tests/face_probe.py
 """
 
+import gc
 from time import sleep
 
 import st7789
@@ -25,8 +26,13 @@ CONFIGS = [
     (320, 240, 180),
 ]
 
+disp = None
 for i, (w, h, rot) in enumerate(CONFIGS, 1):
     print(f"[{i}/{len(CONFIGS)}] width={w} height={h} rotation={rot} -> RED then BLUE")
+    # Free the previous instance's SPI/GPIO lines BEFORE constructing the
+    # next one, or the new object can hit "GPIO line busy".
+    disp = None
+    gc.collect()
     disp = st7789.ST7789(
         port=0,
         cs=0,
