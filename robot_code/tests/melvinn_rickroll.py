@@ -28,6 +28,8 @@ from st7789_raw import ST7789Raw
 MUSIC_DIR = os.path.expanduser("~/music")
 SONG_QUERY = "Rick Astley Never Gonna Give You Up official"
 BEAT = 0.53                    # the song is ~113 BPM
+AUDIO_DEVICE = "plughw:1,0"    # USB speakerphone -- same device assistant.py uses;
+                               # bare mpg123 goes to the Pi's default (HDMI) = silence
 
 disp = ST7789Raw(rotation=90)
 W, H = disp.width, disp.height
@@ -154,7 +156,7 @@ if not song:
 
 print(f"Playing: {os.path.basename(song)}")
 music = subprocess.Popen(
-    ["mpg123", "-q", song],
+    ["mpg123", "-q", "-a", AUDIO_DEVICE, song],
     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
 )
 
