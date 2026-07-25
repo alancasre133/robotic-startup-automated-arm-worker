@@ -1263,6 +1263,34 @@ def play_video(query: str) -> str:
                         lambda: video_routine(path))
 
 
+def robot_see():
+    """Capture a photo and return it as an image tool_result block, so the
+    Claude brain literally sees the scene (objects, text, faces — anything),
+    not just colour blobs. Returns a plain string when the camera is down."""
+    cam = _ensure_camera()
+    if cam is None:
+        return ("My camera isn't working right now — I can only sense "
+                "distance with the ultrasonic sensor.")
+    try:
+        frame = cam.capture_array()          # H x W x 3, BGR (see perception.py)
+    except Exception as exc:
+        return f"Camera capture failed: {exc}"
+    import base64
+    import io
+    from PIL import Image
+    img = Image.fromarray(frame[..., ::-1].copy())   # BGR -> RGB
+    img.thumbnail((640, 480))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=70)
+    b64 = base64.standard_b64encode(buf.getvalue()).decode()
+    return [
+        {"type": "image",
+         "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
+        {"type": "text",
+         "text": "Photo from your forward-facing camera, taken just now."},
+    ]
+
+
 TOOLS = [
     {
         "name": "drive",
@@ -1566,6 +1594,16 @@ TOOLS = [
                        "each joint is.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    {
+        "name": "see",
+        "description": "Take a photo with the camera and SEE it yourself — "
+                       "the image comes back to you, so you can describe "
+                       "objects, read text, recognise anything visual. Use "
+                       "when asked what you see, what something is, or to "
+                       "inspect the scene before acting. (look_for_object is "
+                       "only for colour-blob tracking during grabs.)",
+        "input_schema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -1633,6 +1671,8 @@ def run_tool(name: str, tool_input: dict) -> str:
         return nudge_arm(tool_input["joint"], float(tool_input["degrees"]))
     if name == "arm_status":
         return arm_status()
+    if name == "see":
+        return robot_see()
     return f"Unknown tool: {name}"
 
 
@@ -1668,6 +1708,12 @@ SYSTEM = (
     "of absolute move_arm. Check arm_status when you need to know where the "
     "joints are. Keep responses ultra-short during fine guidance ('wrist 91.') "
     "so the user can keep directing quickly.\n\n"
+    "SEEING: the see tool takes a photo and shows it to YOU — you genuinely "
+    "see and can describe whatever is in front of you: objects, people, text, "
+    "scenes. Use it whenever the user asks what you see or what something is, "
+    "or when a look would help you act (checking a grab target, reading a "
+    "label). look_for_object is only the colour-blob tracker for grabs; for "
+    "real questions, see.\n\n"
     "You can run the robot's test scripts with run_script (grab test, "
     "distance monitor, vision test, arm test, ...) — they run in the "
     "background and 'stop' kills them. Use it when the user asks to run or "
