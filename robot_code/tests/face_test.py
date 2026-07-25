@@ -18,9 +18,13 @@ from time import sleep
 import st7789
 from PIL import Image, ImageDraw
 
+# The st7789 lib only allows ROTATION 0/180 with 320x240, and 90/270 with
+# 240x320 -- same physical landscape either way. If the image is upside
+# down try the other value in the pair; if it comes out portrait, switch
+# to the other WIDTH/HEIGHT + ROTATION combo.
 WIDTH = 320
 HEIGHT = 240
-ROTATION = 90     # panel is portrait-native; 90 gives landscape
+ROTATION = 0
 INVERT = True     # most IPS ST7789 panels want inversion on
 
 disp = st7789.ST7789(
