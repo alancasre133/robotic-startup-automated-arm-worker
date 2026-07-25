@@ -391,21 +391,34 @@ to protect the 3.3V GPIO.
 Divider: `Echo → 1kΩ → pin 35`, then `pin 35 → 2kΩ → GND (pin 39)`.
 Test: `python3 robot_code/tests/obstacle_avoid.py`.
 
-### Face screen (ST7789, SPI)
+### Face screen (GMT020-02-7P — ST7789V, SPI) ✅ wired + working
 
-2.0" IPS display for MELVINN's animated face, over SPI. Pin assignment below
-(CS/DC/RST are the planned free GPIO — adjust the code constants if you wire
-them elsewhere).
+2.0" IPS 240×320 for MELVINN's animated face. The board is a 7-pin
+**GMT020-02-7P** (controller **ST7789V**); its backlight is hardwired to
+VCC — there is no BLK pin, so the panel glows whenever powered
+(`screen_off.py` blanks/sleeps it, only unplugging VCC kills the glow).
 
-| ST7789 pin | Pi pin | GPIO / to |
+| Screen pin | Pi pin | GPIO / to |
 |------------|--------|-----------|
-| VCC | 17 | 3.3V (⚠️ not 5V) |
 | GND | 25 | ground reference |
-| SDA (MOSI) | 19 | GPIO10 |
+| VCC | — | shared **3.3V junction** (pins 1/17 are taken by PCA9685 + BTS7960 logic) ⚠️ never 5V |
 | SCL (SCLK) | 23 | GPIO11 |
-| CS  | 24 | GPIO8 (CE0) |
-| DC  | 18 | GPIO24 |
+| SDA (MOSI) | 19 | GPIO10 |
 | RST | 22 | GPIO25 |
+| DC  | 18 | GPIO24 |
+| CS  | 24 | GPIO8 (CE0) |
+
+Enable SPI once: `sudo raspi-config nonint do_spi 0` + reboot.
+
+**⚠️ The Pimoroni `st7789` pip library does NOT initialize this panel**
+(lit backlight, blank image, every legal config — debugged at length).
+The face runs on the in-repo raw driver instead:
+[st7789_raw.py](robot_code/tests/st7789_raw.py) — bare datasheet init +
+numpy RGB565 blit; needs only spidev/gpiozero/numpy/PIL (all in setup.sh).
+
+Tests: `face_test.py` (fills + eyes), `melvinn_hello.py` (blink → name →
+arm wave), `screen_off.py` (blank + sleep),
+`st7789_raw_test.py` (library-free bring-up that cracked the panel).
 
 ### Camera (IMX219)
 
