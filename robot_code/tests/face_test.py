@@ -26,6 +26,9 @@ WIDTH = 320
 HEIGHT = 240
 ROTATION = 0
 INVERT = True     # most IPS ST7789 panels want inversion on
+# 10 MHz is reliable over Dupont jumpers; raise toward 60 MHz once the
+# panel is proven (blank-but-lit screens are usually speed or wiring).
+SPI_HZ = 10_000_000
 
 disp = st7789.ST7789(
     port=0,
@@ -37,7 +40,7 @@ disp = st7789.ST7789(
     height=HEIGHT,
     rotation=ROTATION,
     invert=INVERT,
-    spi_speed_hz=60_000_000,
+    spi_speed_hz=SPI_HZ,
 )
 
 
