@@ -23,7 +23,7 @@ from libcamera import Transform
 from picamera2 import Picamera2
 
 WIDTH, HEIGHT = 640, 480
-FLIP_180 = True            # camera is mounted upside down (matches vision_track.py)
+FLIP_180 = False           # camera now mounted right-side-up (matches vision_track.py)
 MIN_AREA_FRAC = 0.002      # ignore blobs smaller than this fraction of the frame (noise)
 CENTER_DEADZONE = 0.15     # |offset| under this counts as "centred"
 

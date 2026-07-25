@@ -45,7 +45,7 @@ DETECT_SCALE = 0.5        # detect on a half-size image => faster on the Pi 3
 DEAD_ZONE = 0.15          # |offset| under this (fraction of width) counts as centered
 PULSE = 0.12              # seconds the motors run per correction step
 DRIVE_MOTORS = False      # <<< set True to let it actually turn (WHEELS UP first!)
-FLIP_180 = True           # camera is physically mounted upside down on this robot
+FLIP_180 = False          # camera now mounted right-side-up (flip was for the old mount)
 
 # ---- motors (only imported/used if DRIVE_MOTORS) ----------------------------
 if DRIVE_MOTORS:

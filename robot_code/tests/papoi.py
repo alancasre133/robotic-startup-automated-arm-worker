@@ -41,7 +41,7 @@ WIDTH, HEIGHT = 640, 480
 DETECT_SCALE = 0.5              # detect on a half-size frame => faster on the Pi 3
 COOLDOWN = 5.0                 # seconds of quiet after each face reaction
 DEFAULT_FACE_ACTION = "say papoi"
-FLIP_180 = True                 # camera is physically mounted upside down on this robot
+FLIP_180 = False                # camera now mounted right-side-up (flip was for the old mount)
 
 # --- face detector -----------------------------------------------------------
 _dir = getattr(getattr(cv2, "data", None), "haarcascades", "")

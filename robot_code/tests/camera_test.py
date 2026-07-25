@@ -22,7 +22,7 @@ from time import sleep
 from libcamera import Transform
 from picamera2 import Picamera2
 
-FLIP_180 = True  # camera is physically mounted upside down on this robot
+FLIP_180 = False  # camera now mounted right-side-up (flip was for the old mount)
 
 picam2 = Picamera2()
 

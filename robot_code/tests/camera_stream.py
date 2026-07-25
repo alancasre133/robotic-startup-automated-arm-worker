@@ -21,7 +21,7 @@ from picamera2.encoders import JpegEncoder
 from picamera2.outputs import FileOutput
 
 WIDTH, HEIGHT, PORT = 640, 480, 8000  # modest size — kinder to flaky WiFi
-FLIP_180 = True  # camera is physically mounted upside down on this robot
+FLIP_180 = False  # camera now mounted right-side-up (flip was for the old mount)
 
 PAGE = f"""<!doctype html>
 <title>Robot camera</title>
