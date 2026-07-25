@@ -269,6 +269,39 @@ def robot_move_arm(joint: str, angle: float, smooth: bool = False) -> str:
     return f"Moved {joint} to {angle:.0f} degrees."
 
 
+def nudge_arm(joint: str, degrees: float) -> str:
+    """Move one joint BY a relative amount — surgical fine positioning.
+
+    Steps from the joint's last commanded angle (its center angle if it
+    hasn't been commanded yet this session). +/-1 degree is the finest
+    step the servos resolve.
+    """
+    if not _ARM_LIBS_AVAILABLE:
+        return "Arm libraries not installed — see docs/arm-setup.md"
+    if _ensure_arm() is None:
+        return "Arm not connected (PCA9685 not found on I2C) — check wiring."
+    if joint not in ARM_JOINTS:
+        return f"Unknown joint: {joint}. Joints: {', '.join(ARM_JOINTS)}."
+    cur = _arm_current.get(joint, ARM_CENTER_ANGLES[joint])
+    target = max(0.0, min(180.0, cur + degrees))
+    _arm_servos[joint].angle = target
+    _arm_current[joint] = target
+    if target == cur:
+        return f"{joint} is already at its {cur:.0f}-degree limit."
+    return f"{joint}: {cur:.0f} -> {target:.0f} degrees ({target - cur:+.1f})."
+
+
+def arm_status() -> str:
+    """Report every joint's current (last commanded) angle."""
+    parts = []
+    for j in ARM_JOINTS:
+        if j in _arm_current:
+            parts.append(f"{j} {_arm_current[j]:.0f}")
+        else:
+            parts.append(f"{j} ~{ARM_CENTER_ANGLES[j]:.0f} (not moved yet)")
+    return "Joint angles: " + ", ".join(parts) + "."
+
+
 # ---------------------------------------------------------------------------
 # Arm poses + gripper — named presets used by the grab behaviour
 # ---------------------------------------------------------------------------
@@ -1505,6 +1538,34 @@ TOOLS = [
             "properties": {"query": {"type": "string"}},
         },
     },
+    {
+        "name": "nudge_arm",
+        "description": "SURGICAL arm control: move ONE joint BY a relative "
+                       "number of degrees from where it is now (e.g. +1, -1, "
+                       "+5). Use this — not move_arm — when the user is "
+                       "guiding you incrementally: 'one degree up', 'a tiny "
+                       "bit left', 'a little more', 'back down 2'. Positive "
+                       "raises the angle, negative lowers it.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "joint": {"type": "string",
+                          "enum": ["base", "shoulder", "elbow", "wrist",
+                                   "wrist_rotate", "gripper"]},
+                "degrees": {"type": "number",
+                            "description": "relative change, may be negative; "
+                                           "1 = finest step"},
+            },
+            "required": ["joint", "degrees"],
+        },
+    },
+    {
+        "name": "arm_status",
+        "description": "Report the current angle of every arm joint. Call "
+                       "before or during fine positioning so you know where "
+                       "each joint is.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
 ]
 
 
@@ -1568,6 +1629,10 @@ def run_tool(name: str, tool_input: dict) -> str:
         return download_video(tool_input["query"])
     if name == "play_video":
         return play_video(tool_input.get("query", ""))
+    if name == "nudge_arm":
+        return nudge_arm(tool_input["joint"], float(tool_input["degrees"]))
+    if name == "arm_status":
+        return arm_status()
     return f"Unknown tool: {name}"
 
 
@@ -1597,6 +1662,12 @@ SYSTEM = (
     "download_video(query) fetches one from YouTube (takes a minute or two); "
     "play_video(query) plays a downloaded one. If asked to download and "
     "watch, download first, then play.\n\n"
+    "SURGICAL ARM MODE: when the user guides you incrementally ('one degree "
+    "up', 'a bit more', 'tiny bit left'), use nudge_arm(joint, degrees) with "
+    "small relative values (+1/-1 for 'a degree', +5/-5 for 'a bit') instead "
+    "of absolute move_arm. Check arm_status when you need to know where the "
+    "joints are. Keep responses ultra-short during fine guidance ('wrist 91.') "
+    "so the user can keep directing quickly.\n\n"
     "You can run the robot's test scripts with run_script (grab test, "
     "distance monitor, vision test, arm test, ...) — they run in the "
     "background and 'stop' kills them. Use it when the user asks to run or "
