@@ -1127,6 +1127,103 @@ def dance_routine(seconds: float = 15.0) -> str:
     return "Dance finished — that was fun!"
 
 
+# ---------------------------------------------------------------------------
+# Video — yt-dlp download + playback on the LCD face screen with audio
+# ---------------------------------------------------------------------------
+VIDEO_DIR = os.path.expanduser("~/videos")
+VIDEO_FPS = 12          # decode/display rate; SPI at 32 MHz sustains this fine
+
+
+def download_video(query: str) -> str:
+    """Download a video (<=360p, single-file format -- no merging needed)."""
+    if not shutil.which("yt-dlp"):
+        return "yt-dlp is not installed."
+    os.makedirs(VIDEO_DIR, exist_ok=True)
+    try:
+        subprocess.run(
+            ["yt-dlp", "-f", "b[height<=360]",
+             "--output", os.path.join(VIDEO_DIR, "%(title)s.%(ext)s"),
+             f"ytsearch1:{query}"],
+            check=True, timeout=300,
+        )
+    except subprocess.TimeoutExpired:
+        return "The download took too long and was cancelled."
+    except subprocess.CalledProcessError as exc:
+        return f"Download failed: {exc}"
+    return "Downloaded! Ask me to play it and I'll show it on my face."
+
+
+def _find_video(query: str):
+    if not os.path.isdir(VIDEO_DIR):
+        return None
+    files = [os.path.join(VIDEO_DIR, f) for f in os.listdir(VIDEO_DIR)
+             if f.lower().endswith((".mp4", ".mkv", ".webm"))]
+    if not files:
+        return None
+    files.sort(key=os.path.getmtime)
+    words = [w for w in query.lower().split() if w]
+    if not words:
+        return files[-1]                     # no query -> most recent download
+    for path in reversed(files):
+        if all(w in os.path.basename(path).lower() for w in words):
+            return path
+    return None
+
+
+def video_routine(path: str) -> str:
+    """Play a video on the face screen; audio to the USB speaker. One ffmpeg
+    process feeds both outputs, so A/V stay on the same clock: video decoded
+    straight to RGB565 frames on stdout (blitted raw to the panel), audio to
+    ALSA. Runs as a background action -- 'stop' interrupts it."""
+    face = _ensure_face()
+    if face is None:
+        return f"My face screen isn't available ({_FACE_ERR})."
+    if not shutil.which("ffmpeg"):
+        return "ffmpeg is not installed."
+    sleep(2.5)          # let the spoken acknowledgement finish before ffmpeg
+    _stop_music()       # grabs the same exclusive ALSA device
+    w, h = face.width, face.height
+    frame_bytes = w * h * 2
+    vf = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
+          f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={VIDEO_FPS}")
+    proc = subprocess.Popen(
+        ["ffmpeg", "-loglevel", "error", "-re", "-i", path,
+         "-map", "0:v:0", "-vf", vf,
+         "-f", "rawvideo", "-pix_fmt", "rgb565be", "pipe:1",
+         "-map", "0:a:0?", "-f", "alsa", AUDIO_DEVICE],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    )
+    frames = 0
+    try:
+        while not _stopped():
+            data = proc.stdout.read(frame_bytes)
+            if not data or len(data) < frame_bytes:
+                break
+            face.display_raw565(data)
+            frames += 1
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+    _face_frame(mouth="smile")
+    name = os.path.basename(path)
+    if frames == 0:
+        return f"I couldn't decode {name} — is ffmpeg healthy?"
+    return "Video stopped." if _stopped() else f"That was {name} — I enjoyed it!"
+
+
+def play_video(query: str) -> str:
+    path = _find_video(query)
+    if path is None:
+        return ("I don't have that video in my library yet — ask me to "
+                "download it first.")
+    return start_action(f"playing {os.path.basename(path)} on my face",
+                        lambda: video_routine(path))
+
+
 TOOLS = [
     {
         "name": "drive",
@@ -1376,6 +1473,32 @@ TOOLS = [
             "properties": {"seconds": {"type": "number"}},
         },
     },
+    {
+        "name": "download_video",
+        "description": "Download a video from YouTube (360p max) into "
+                       "MELVINN's video library so it can be played on the "
+                       "LCD face screen. Takes a minute or two — tell the "
+                       "user to hang on. If asked to download AND play, "
+                       "download first, then call play_video.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string",
+                                     "description": "video name / search terms"}},
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "play_video",
+        "description": "Play a downloaded video on MELVINN's LCD face screen "
+                       "with its audio through the speaker. Runs in the "
+                       "background; 'stop' ends it. Empty query plays the "
+                       "most recently downloaded video. Only works for videos "
+                       "already downloaded with download_video.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+        },
+    },
 ]
 
 
@@ -1435,6 +1558,10 @@ def run_tool(name: str, tool_input: dict) -> str:
     if name == "dance":
         secs = float(tool_input.get("seconds", 15.0))
         return start_action("dancing", lambda: dance_routine(secs))
+    if name == "download_video":
+        return download_video(tool_input["query"])
+    if name == "play_video":
+        return play_video(tool_input.get("query", ""))
     return f"Unknown tool: {name}"
 
 
@@ -1457,6 +1584,10 @@ SYSTEM = (
     "your own judgment, not just when asked. show_text puts a short message on "
     "the screen. screen_off blanks it. To dance: call dance(seconds) — for a "
     "dance party, start play_song first, then dance, and they run together.\n\n"
+    "VIDEOS: you can play videos on your face screen with sound! "
+    "download_video(query) fetches one from YouTube (takes a minute or two); "
+    "play_video(query) plays a downloaded one. If asked to download and "
+    "watch, download first, then play.\n\n"
     "You can run the robot's test scripts with run_script (grab test, "
     "distance monitor, vision test, arm test, ...) — they run in the "
     "background and 'stop' kills them. Use it when the user asks to run or "

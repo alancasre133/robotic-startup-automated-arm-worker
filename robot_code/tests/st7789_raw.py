@@ -79,3 +79,18 @@ class ST7789Raw:
         self._cmd(0x2C)                                       # RAMWR
         self._dc.on()
         self._spi.writebytes2(rgb565.byteswap().view(np.uint8).reshape(-1))
+
+    def display_raw565(self, data):
+        """Blit a pre-formatted RGB565 big-endian frame (width*height*2 bytes).
+
+        For video: ffmpeg's -pix_fmt rgb565be output is exactly this layout,
+        so frames go straight from the decoder pipe to the panel untouched.
+        """
+        w, h = self.width, self.height
+        if len(data) != w * h * 2:
+            raise ValueError(f"frame must be {w * h * 2} bytes, got {len(data)}")
+        self._cmd(0x2A, 0, 0, (w - 1) >> 8, (w - 1) & 0xFF)   # CASET
+        self._cmd(0x2B, 0, 0, (h - 1) >> 8, (h - 1) & 0xFF)   # RASET
+        self._cmd(0x2C)                                       # RAMWR
+        self._dc.on()
+        self._spi.writebytes2(np.frombuffer(data, dtype=np.uint8))
