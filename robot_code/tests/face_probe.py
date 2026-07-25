@@ -17,11 +17,10 @@ from time import sleep
 import st7789
 from PIL import Image
 
+# The st7789 lib only allows rotation 0/180 on non-square panels.
 CONFIGS = [
     (240, 320, 0),
-    (240, 320, 90),
     (240, 320, 180),
-    (240, 320, 270),
     (320, 240, 0),
     (320, 240, 180),
 ]
