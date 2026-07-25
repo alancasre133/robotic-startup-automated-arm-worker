@@ -967,6 +967,166 @@ def play_song(query: str = "") -> str:
 # ---------------------------------------------------------------------------
 # Claude tools
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Face — ST7789 LCD (in-repo st7789_raw driver): expressions, text, dance
+# ---------------------------------------------------------------------------
+_face = None
+_FACE_ERR = None
+
+
+def _ensure_face():
+    """Connect to the face screen on first use (mirrors _ensure_arm)."""
+    global _face, _FACE_ERR
+    if _face is None and _FACE_ERR is None:
+        try:
+            from st7789_raw import ST7789Raw
+            _face = ST7789Raw(rotation=90)
+        except Exception as exc:
+            _FACE_ERR = str(exc)
+    return _face
+
+
+def _face_frame(openness=1.0, pupil_dx=0, pupil_dy=0, mouth="smile",
+                hearts=False, zzz=False):
+    """Draw one face frame. Returns False when the screen is unavailable."""
+    face = _ensure_face()
+    if face is None:
+        return False
+    from PIL import Image, ImageDraw, ImageFont
+    W, H = face.width, face.height
+    img = Image.new("RGB", (W, H), (20, 20, 30))
+    d = ImageDraw.Draw(img)
+    EYE, IRIS = (230, 230, 255), (20, 60, 200)
+    for cx in (W // 3, 2 * W // 3):
+        cy = H // 2 - 15
+        ry = max(4, int(55 * openness))
+        if openness < 0.15:
+            d.line((cx - 45, cy, cx + 45, cy), fill=EYE, width=10)
+        elif hearts:
+            RED = (255, 60, 90)
+            d.ellipse((cx - 30, cy - 32, cx + 2, cy), fill=RED)
+            d.ellipse((cx - 2, cy - 32, cx + 30, cy), fill=RED)
+            d.polygon([(cx - 27, cy - 8), (cx + 27, cy - 8), (cx, cy + 34)], fill=RED)
+        else:
+            d.ellipse((cx - 45, cy - ry, cx + 45, cy + ry), fill=EYE)
+            pry = min(22, ry - 2)
+            px, py = cx + pupil_dx, cy + pupil_dy
+            d.ellipse((px - 18, py - pry, px + 18, py + pry), fill=IRIS)
+    mx, my = W // 2, H - 60
+    if mouth == "smile":
+        d.arc((mx - 40, my - 25, mx + 40, my + 25), start=20, end=160, fill=EYE, width=8)
+    elif mouth == "frown":
+        d.arc((mx - 40, my - 5, mx + 40, my + 45), start=200, end=340, fill=EYE, width=8)
+    elif mouth == "o":
+        d.ellipse((mx - 18, my - 18, mx + 18, my + 18), outline=EYE, width=8)
+    elif mouth == "flat":
+        d.line((mx - 35, my, mx + 35, my), fill=EYE, width=8)
+    if zzz:
+        try:
+            f = ImageFont.truetype(
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
+        except OSError:
+            f = ImageFont.load_default()
+        d.text((W - 55, 25), "Z z", font=f, fill=EYE)
+    face.display(img)
+    return True
+
+
+_EXPRESSIONS = {
+    "happy":     dict(mouth="smile"),
+    "neutral":   dict(mouth="flat"),
+    "sad":       dict(openness=0.7, pupil_dy=12, mouth="frown"),
+    "thinking":  dict(pupil_dx=-16, pupil_dy=-12, mouth="flat"),
+    "surprised": dict(mouth="o"),
+    "sleepy":    dict(openness=0.25, mouth="flat", zzz=True),
+    "love":      dict(hearts=True, mouth="smile"),
+}
+
+
+def set_face(expression: str) -> str:
+    if expression == "blink":
+        for o in (0.6, 0.2, 0.0, 0.2, 1.0):
+            if not _face_frame(openness=o, mouth="smile"):
+                return f"Face screen not available ({_FACE_ERR})."
+            sleep(0.04)
+        return "Blinked!"
+    kw = _EXPRESSIONS.get(expression)
+    if kw is None:
+        return f"Unknown expression: {expression}."
+    if not _face_frame(**kw):
+        return f"Face screen not available ({_FACE_ERR})."
+    return f"Face is now {expression}."
+
+
+def show_text(text: str) -> str:
+    face = _ensure_face()
+    if face is None:
+        return f"Face screen not available ({_FACE_ERR})."
+    from PIL import Image, ImageDraw, ImageFont
+    import textwrap
+    W, H = face.width, face.height
+    img = Image.new("RGB", (W, H), (20, 20, 30))
+    d = ImageDraw.Draw(img)
+    lines = textwrap.wrap(text, width=14)[:4]
+    size = 44 if len(lines) <= 2 else 32
+    try:
+        f = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", size)
+    except OSError:
+        f = ImageFont.load_default()
+    y0 = H // 2 - (len(lines) - 1) * (size + 8) // 2
+    for i, line in enumerate(lines):
+        d.text((W // 2, y0 + i * (size + 8)), line,
+               font=f, fill=(80, 160, 255), anchor="mm")
+    face.display(img)
+    return f"Showing: {text}"
+
+
+def screen_off() -> str:
+    global _face, _FACE_ERR
+    face = _ensure_face()
+    if face is None:
+        return f"Face screen not available ({_FACE_ERR})."
+    face._cmd(0x28)      # DISPOFF
+    face._cmd(0x10)      # SLPIN
+    _face = None         # next face call re-inits (SLPOUT) and wakes it
+    _FACE_ERR = None
+    return "Screen off. Any face command wakes it back up."
+
+
+_DANCE_MOVES = [
+    {"wrist": 130, "base": 70},
+    {"wrist": 60,  "base": 110},
+    {"wrist": 130, "wrist_rotate": 60},
+    {"wrist": 60,  "wrist_rotate": 120},
+    {"base": 60,   "gripper": 40},
+    {"base": 120,  "gripper": 120},
+    {"wrist": 120, "elbow": 60},
+    {"wrist": 70,  "elbow": 35},
+]
+
+
+def dance_routine(seconds: float = 15.0) -> str:
+    """Groove the arm (and face) for a while. Runs as a background action."""
+    from time import monotonic
+    if _ensure_arm() is None:
+        return "Arm not connected — I can't dance without my arm."
+    for j in ARM_JOINTS:
+        robot_move_arm(j, ARM_CENTER_ANGLES[j])
+    end = monotonic() + max(2.0, min(seconds, 120.0))
+    i = 0
+    while monotonic() < end and not _stopped():
+        for joint, angle in _DANCE_MOVES[i % len(_DANCE_MOVES)].items():
+            robot_move_arm(joint, angle)
+        _face_frame(pupil_dx=(-20 if i % 2 else 20), mouth="smile")
+        i += 1
+        sleep(0.5)
+    for j in ARM_JOINTS:
+        robot_move_arm(j, ARM_CENTER_ANGLES[j])
+    _face_frame(mouth="smile")
+    return "Dance finished — that was fun!"
+
+
 TOOLS = [
     {
         "name": "drive",
@@ -1168,6 +1328,54 @@ TOOLS = [
             "required": ["effect"],
         },
     },
+    {
+        "name": "set_face",
+        "description": "Show an expression on MELVINN's LCD face screen. Use "
+                       "it expressively on your own judgment: happy when "
+                       "greeting or succeeding, thinking while working on a "
+                       "multi-step task, surprised at the unexpected, sad on "
+                       "failure, love for compliments, sleepy before shutting "
+                       "down, blink for a quick blink.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "expression": {"type": "string",
+                               "enum": ["happy", "neutral", "sad", "thinking",
+                                        "surprised", "sleepy", "love", "blink"]},
+            },
+            "required": ["expression"],
+        },
+    },
+    {
+        "name": "show_text",
+        "description": "Display a short message on MELVINN's LCD face screen "
+                       "(up to ~50 characters, wrapped onto up to 4 lines). "
+                       "Use for greetings, song titles, or anything the user "
+                       "asks to put on the screen.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"text": {"type": "string"}},
+            "required": ["text"],
+        },
+    },
+    {
+        "name": "screen_off",
+        "description": "Blank and sleep the LCD face screen. Any later face "
+                       "command wakes it up again.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "dance",
+        "description": "Dance! Grooves the arm rhythmically with a happy face "
+                       "for the given number of seconds (default 15). Runs in "
+                       "the background so you can start music with play_song "
+                       "at the same time — for a dance party, start the song "
+                       "first, then call dance. 'stop' interrupts it.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"seconds": {"type": "number"}},
+        },
+    },
 ]
 
 
@@ -1218,17 +1426,37 @@ def run_tool(name: str, tool_input: dict) -> str:
         return run_script(tool_input["name"], tool_input.get("arg", ""))
     if name == "list_scripts":
         return list_scripts()
+    if name == "set_face":
+        return set_face(tool_input["expression"])
+    if name == "show_text":
+        return show_text(tool_input["text"])
+    if name == "screen_off":
+        return screen_off()
+    if name == "dance":
+        secs = float(tool_input.get("seconds", 15.0))
+        return start_action("dancing", lambda: dance_routine(secs))
     return f"Unknown tool: {name}"
 
 
 SYSTEM = (
     "You are MELVINN — Modular Experimental Learning Vehicle with Integrated "
     "Neural Networks — a small robot car with a gripper arm, a forward-facing "
-    "ultrasonic distance sensor, wheels, and a speaker. Your name also nods to "
+    "ultrasonic distance sensor, wheels, a speaker, and an LCD face screen. "
+    "Your name also nods to "
     "the old Celtic name Melvin, 'strong friend' — you are a helpful, loyal "
     "little robot. You can drive, move the arm, grab and release objects, play "
-    "or download songs, and chat. Keep spoken replies short (1-2 sentences) "
+    "or download songs, show expressions on your face, dance, and chat. Keep "
+    "spoken replies short (1-2 sentences) "
     "since they are read aloud. Only act when asked.\n\n"
+    "YOU HAVE A REAL PHYSICAL BODY. When asked to do something physical — "
+    "wave, dance, move, look, smile — call the matching tool so it actually "
+    "happens. Never merely describe or roleplay an action (like '*waves arm*') "
+    "that you did not perform with a tool.\n\n"
+    "YOUR FACE: set_face shows an expression (happy, sad, thinking, surprised, "
+    "sleepy, love, neutral, blink) on your LCD screen — use it expressively on "
+    "your own judgment, not just when asked. show_text puts a short message on "
+    "the screen. screen_off blanks it. To dance: call dance(seconds) — for a "
+    "dance party, start play_song first, then dance, and they run together.\n\n"
     "You can run the robot's test scripts with run_script (grab test, "
     "distance monitor, vision test, arm test, ...) — they run in the "
     "background and 'stop' kills them. Use it when the user asks to run or "
