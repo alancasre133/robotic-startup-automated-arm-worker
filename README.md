@@ -530,27 +530,34 @@ reflexes with the Claude "brain" — is in [docs/vision.md](docs/vision.md).
 
 ## Talk to the Robot (assistant)
 
-Talk (or type) a command and the robot **drives, moves its arm, plays music, or
-just replies** — out loud. Two brains, automatic fallback:
+Talk (or type) a command and the robot **drives, moves its arm, dances, grabs
+things, plays music and videos, emotes on its face screen, or just replies** —
+out loud. Two brains, automatic fallback:
 
 - **Claude API (smart)** — natural language, when `ANTHROPIC_API_KEY` is set.
-- **Offline rules (free)** — a keyword parser; no key, no internet, no extra
-  installs. Used automatically if Claude isn't available.
+  Claude gets ~20 tools and decides for itself which to use (and chains them:
+  sensor → decision → motion).
+- **Offline rules (free)** — a keyword parser covering the basics; no key, no
+  internet, no extra installs. Used automatically if Claude isn't available.
 
 ```bash
 python3 robot_code/tests/assistant.py           # VOICE mode — mic -> Vosk -> brain
 python3 robot_code/tests/assistant.py --type    # TEXT  mode — keyboard -> brain
 ```
 
-Example commands (spoken or typed):
+Example commands (spoken or typed — with the Claude brain, phrase them however
+you like):
 ```
-move forward / go back / turn left / spin        -> drives the motors
-move the shoulder to 45 / open the gripper        -> moves the arm (PCA9685)
-play despacito / play a song                      -> plays from ~/music
-download despacito                                -> downloads via yt-dlp
-stop the music                                    -> stops playback
-say hello                                         -> speaks the text
-stop                                              -> stops motors instantly
+DRIVE    move forward / go back / turn left / spin / stop
+ARM      move the shoulder to 45 / open the gripper / arm to reach pose / dance
+GRAB     grab the red object / pick up all the blue objects   (camera-guided)
+SENSE    how far is the thing in front of you? / look for the green object
+MUSIC    play despacito / download <any song> / stop the music
+VIDEO    download the <video name> video / play it on your face   (LCD + audio)
+FACE     look happy / show "HELLO" on your screen / screen off
+VOICE    change your voice / talk like a dalek / bark like a dog
+SCRIPTS  run the arm test / run the distance monitor
+stop     interrupts whatever is running (motors, grab, dance, video)
 ```
 
 Replies are spoken through the USB speaker (Piper if installed, else espeak-ng).

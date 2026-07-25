@@ -7,13 +7,19 @@ TWO brains, automatic fallback:
   1. Claude API (smart)  — natural language, when a key is set and the API works.
   2. Offline rules (free) — keyword parser; no key, no internet, no extra installs.
 
-Voice commands supported:
-  move forward / go back / turn left / spin      -> drives the motors
-  play a song / play despacito                   -> plays from ~/music
-  download despacito                             -> downloads via yt-dlp
-  stop the music                                 -> stops playback
-  say hello                                      -> speaks the text
-  stop                                           -> stops motors instantly
+What MELVINN can do (Claude brain; the offline brain covers the basics):
+  DRIVE     move forward / go back / turn left / spin / stop
+  ARM       move the arm, poses (home/ready/reach/lift/drop), gripper, dance
+  GRAB      grab the red object / pick up all the blue ones (camera-guided)
+  SENSE     how far is the thing ahead? / look for the green object
+  MUSIC     play a song / download <song> / stop the music
+  VIDEO     download <video> / play it on your face (LCD + speaker)
+  FACE      show an expression (happy/sad/thinking/surprised/sleepy/love),
+            display text on the screen, screen off
+  VOICE     change voice, list voices, sound effects (robot/dalek/monster...),
+            animal sounds (bark, meow, howl...)
+  SCRIPTS   run the test scripts (arm test, distance monitor, ...)
+  stop      interrupts whatever is running (motors, grab, dance, video)
 
 Modes:
   python3 robot_code/tests/assistant.py           -> VOICE mode  (mic -> Vosk -> brain)
@@ -2410,7 +2416,11 @@ def main() -> None:
     brain_label = f"Claude ({MODEL})" if client is not None else "offline rules"
     input_label = "voice (Vosk)" if voice_mode else "keyboard"
     print(f"Brain: {brain_label}  |  Input: {input_label}")
-    print("Commands: move forward / spin / play a song / download despacito / stop")
+    if client is not None:
+        print("Talk to me: drive / arm / dance / grab / music / videos on my "
+              "face / expressions / voices / 'stop' interrupts anything")
+    else:
+        print("Commands: move forward / spin / play a song / download despacito / stop")
     if voice_mode:
         if wake_mode:
             print(f"Say '{WAKE_WORD.title()}' to wake me, then give a command. Ctrl-C to quit.\n")
