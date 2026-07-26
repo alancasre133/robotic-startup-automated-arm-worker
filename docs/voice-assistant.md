@@ -36,7 +36,7 @@ Tools exposed to Claude:
 
 | Tool | Maps to | Status |
 |------|---------|--------|
-| `drive(direction, seconds)` | the L9110S motors | ✅ working |
+| `drive(direction, seconds)` | the 2× BTS7960 drive boards | ✅ working |
 | `move_arm(joint, angle)` | a PCA9685 servo channel | ✅ working — all 6 joints tested |
 | `play_song(query)` / `download_song(query)` / `stop_music()` | mpg123 / yt-dlp | ✅ working |
 

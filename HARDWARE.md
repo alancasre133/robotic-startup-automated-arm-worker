@@ -28,22 +28,34 @@ the board's silkscreen GPIO# labels).
 | 2 | microSD card, 16 GB+ (Class 10/A1) | 1 | Operating system (Raspberry Pi OS Lite, Trixie) | 120–200 |
 | 3 | USB power bank, 5V / 2A+ — bought: [Redmi 20000mAh 18W Fast Charge Power Bank](https://www.mercadolibre.com.mx/20000mah-redmi-18w-fast-charge-power-bank-black/p/MLM21029066) | 1 | Powers the Pi (kept separate from motor power) | 200–450 |
 | 4 | 4WD robot car chassis kit (4× TT gear motors + wheels) | 1 | Frame + drivetrain. Replaced the original 2WD/caster chassis — the arm's weight was too much for two driven wheels | 150–400 |
-| 5 | L9110S dual H-bridge motor driver | 1 | Lets the Pi drive the motors forward/back | 30–60 |
-| 6 | AA batteries | 4 | Motor power (~6V), via the holder in the kit | 40–80 |
-| 7 | Dupont jumper wires (M–F & F–F, 40+) | 1 set | Pi GPIO ↔ L9110S, battery joins | 80–120 |
+| 5 | **BTS7960 (IBT-2) H-bridge, 43A** | **2** | Drive motors — one board per side, that side's two motors paralleled on it. Replaced the single L9110S, which overheated at ~3× its channel rating with 4 motors | 80–140 ea |
+| 6 | 6V NiMH battery pack (2200 mAh) | 1 | Drive-motor power to the BTS7960 B+/B− (the **same kind** of pack as the servo supply). Fused at 7.5A in the B+ line | ~280 |
+| 7 | Dupont jumper wires (M–F & F–F, 40+) + thick wire for B+/B− | 1 set | Pi GPIO ↔ drivers, battery joins | 80–120 |
 
-> The chassis kit (#4) usually bundles the motors, wheels, and battery holder.
-> If you buy parts separately you'll also need 4× TT gear motors + wheels.
+> The chassis kit (#4) bundles the motors and wheels. The motors are still the
+> original **TT gearmotors**; a swap to metal-gear **JGA25-370 6V** motors is
+> ordered (10× the torque) — see the Drive upgrade note in the README.
 >
-> ⚠️ **4WD wiring caveat:** the two extra motors are currently **paralleled onto
-> the existing L9110S channels** (front+rear of each side share one channel).
-> That puts two TT motors' breakaway current (~2A) on a channel rated ~800mA —
-> the driver sags/limits exactly when the bot tries to start moving. If starts
-> are unreliable, the proper fix is a **second L9110S** for the rear pair
-> (spare PCA9685 channels 6–9 can supply its logic inputs — no extra Pi GPIO
-> needed). When paralleling, mind polarity: front/rear motors are mounted
-> mirrored, so one motor of each pair needs its leads swapped or the pair
-> fights itself.
+> ✅ **4WD drive is 2× BTS7960 now.** Each board drives one side's two
+> paralleled TT motors from a 6V NiMH pack (43A rating — no overcurrent
+> sag, unlike the old L9110S). `gpiozero`'s `Motor(forward, backward)` drives
+> each board's RPWM/LPWM directly; R_EN + L_EN are tied to 3.3V (always
+> enabled). Polarity note: front/rear motors are mounted mirrored, so on each
+> board one motor of the pair has its two leads swapped at the M+/M− terminals
+> or the pair fights itself. ⚠️ Reverse polarity on B+/B− is the one thing that
+> kills a BTS7960 — double-check before connecting the pack.
+
+## Face screen (LCD)
+
+| # | Component | Qty | What it's for | Approx. (MXN) |
+|---|-----------|-----|---------------|---------------|
+| — | 2.0" IPS SPI LCD (**GMT020-02-7P**, ST7789V, 240×320) | 1 | MELVINN's animated face — expressions, text, and video playback | 80–150 |
+
+> Backlight is hardwired to VCC (no BLK pin), so it glows whenever powered.
+> ⚠️ The Pimoroni `st7789` pip library does **not** initialize this panel —
+> the face runs on the in-repo raw driver
+> [`robot_code/tests/st7789_raw.py`](robot_code/tests/st7789_raw.py). Wiring is
+> in the quick reference below.
 
 ## Optional — camera (vision)
 
@@ -152,22 +164,35 @@ the board's silkscreen GPIO# labels).
 
 ## Wiring quick reference
 
-Pi GPIO → L9110S (BCM numbers):
+Pi GPIO → 2× BTS7960 (one board per side; reuses the freed-up L9110S pins):
 
-| L9110S pin | Pi pin | GPIO |
-|------------|--------|------|
-| A-1A | 36 | GPIO16 |
-| A-1B | 38 | GPIO20 |
-| B-1A | 13 | GPIO27 |
-| B-2A | 15 | GPIO22 |
-| GND  | 6  | (ground) |
+| Board | RPWM | LPWM | R_EN + L_EN | VCC | GND |
+|-------|------|------|-------------|-----|-----|
+| **Left**  | GPIO16 (pin 36) | GPIO20 (pin 38) | Pi 3.3V | Pi 3.3V | Pi GND |
+| **Right** | GPIO27 (pin 13) | GPIO22 (pin 15) | Pi 3.3V | Pi 3.3V | Pi GND |
 
-On the 4WD chassis each L9110S channel drives **two paralleled TT motors**
-(front + rear of one side) — see the overcurrent caveat in the Core build
-section above.
+Each board's **B+/B−** takes the 6V NiMH drive pack (**B+ through the 7.5A
+fuse**, thick wire); each board's **M+/M−** drives that side's two paralleled
+TT motors. R_EN + L_EN tied to 3.3V keeps both boards always enabled. If a
+whole side runs backwards, swap that board's RPWM/LPWM (or its M+/M−). The Pi
+is powered separately by the USB power bank. Bring-up + test:
+[`robot_code/tests/bts7960_test.py`](robot_code/tests/bts7960_test.py).
 
-Power: battery **+** → L9110S **VCC**, battery **−** → Pi **pin 9** (GND).
-The Pi is powered separately by the USB power bank.
+Pi → face screen (**GMT020-02-7P / ST7789V**, SPI0). Enable SPI once with
+`sudo raspi-config nonint do_spi 0` + reboot:
+
+| Screen pin | Pi pin | GPIO / to |
+|------------|--------|-----------|
+| GND | 25 | ground |
+| VCC | — | shared **3.3V junction** (pins 1/17 are taken) ⚠️ never 5V |
+| SCL | 23 | GPIO11 |
+| SDA | 19 | GPIO10 |
+| RST | 22 | GPIO25 |
+| DC  | 18 | GPIO24 |
+| CS  | 24 | GPIO8 (CE0) |
+
+Runs on [`robot_code/tests/st7789_raw.py`](robot_code/tests/st7789_raw.py);
+tests: `face_test.py`, `face_styles.py`, `melvinn_hello.py`.
 
 Pi → PCA9685 (physical pin numbers, I²C):
 

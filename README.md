@@ -8,7 +8,7 @@ A Raspberry Pi 3 based robotic arm project.
 
 ## What works today
 
-- 🧪 **Drive** — 4WD chassis (4× TT motors via an L9110S, front+rear paralleled per side) — moving under the arm's weight is still being tuned
+- ✅ **Drive** — 4WD chassis, 4× TT motors on **2× BTS7960** (one board per side, that side's pair paralleled) — drives with real forward/back/turn/spin; metal-gear motor upgrade in progress
 - ✅ **Camera** — IMX219: stills + a **live browser stream** (no screen on the Pi)
 - ✅ **Remote access** — watch the camera **from anywhere over the internet** via Tailscale
 - 🧪 **Vision** — on-device **face detection + motor tracking** (experimental)
