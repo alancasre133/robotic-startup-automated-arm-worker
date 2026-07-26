@@ -671,7 +671,8 @@ def smart_grab(color: str = "red") -> str:
     arm_pose("ready")
     gripper("open")
     try:
-        for attempt in range(1, GRAB_ATTEMPTS + 1):
+        tries = 6                    # keep trying; say "stop" to interrupt anytime
+        for attempt in range(1, tries + 1):
             if _stopped():
                 return "Stopped."
             r = look_for_object(color)
@@ -682,7 +683,14 @@ def smart_grab(color: str = "red") -> str:
                 plan = ac.plan_reach(ARM_POSES["reach"], base)
             else:
                 speak("I can't see it, reaching straight ahead.")
-                plan = ARM_POSES["reach"]
+                plan = dict(ARM_POSES["reach"])
+            # Each retry, reach a bit lower + further so we don't repeat the
+            # exact same miss — explore a slightly different landing spot.
+            if attempt > 1:
+                d = 6.0 * (attempt - 1)
+                plan = dict(plan)
+                plan["shoulder"] = max(0.0, min(180.0, plan["shoulder"] - d))
+                plan["elbow"] = max(0.0, min(180.0, plan["elbow"] + d))
 
             for joint, angle in plan.items():        # aim + reach in one move
                 robot_move_arm(joint, angle, smooth=True)
@@ -694,12 +702,12 @@ def smart_grab(color: str = "red") -> str:
             if _verify_grab(color, pre_area):
                 chirp("happy")
                 return "Got it." if attempt == 1 else f"Got it on try {attempt}."
-            if attempt < GRAB_ATTEMPTS:
+            if attempt < tries:
                 chirp("sad")
-                speak("Missed it, trying again.")
+                speak(f"Missed it, adjusting and trying again (try {attempt + 1}).")
                 gripper("open")
                 arm_pose("ready")
-        return "I aimed and tried but couldn't grab it."
+        return "I tried several times and couldn't grab it — say stop, or guide me."
     finally:
         _close_camera()
 
@@ -1877,6 +1885,13 @@ SYSTEM = (
     "is right at the object, gripper('close') then arm_pose('lift'). Check "
     "arm_status to see where all joints are. You can't see your own gripper "
     "(chassis camera), so reason about ALL the joints together, not just one.\n\n"
+    "KEEP-TRYING GRABS: your inline reach above is a single careful attempt and "
+    "CANNOT be interrupted (your turn blocks input). When the user wants you to "
+    "keep trying until you get it and be able to say 'stop', call smart_grab "
+    "instead — it runs in the background, retries several times adjusting each "
+    "time, and 'stop' interrupts it. Prefer smart_grab for real 'grab it' "
+    "requests; use the inline degree-by-degree reach when the user wants to "
+    "watch you position the arm joint by joint.\n\n"
     "NEVER FAKE A GRAB. You CANNOT see your own gripper with the chassis "
     "camera, so you cannot visually confirm you are holding something — do NOT "
     "say 'got it', 'lifted', or 'in my gripper' from assumption or expectation. "
