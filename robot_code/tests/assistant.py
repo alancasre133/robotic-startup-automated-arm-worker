@@ -864,7 +864,7 @@ def _play_file(path: str) -> str:
     # send aplay after the SAME exclusive ALSA hw device mpg123 just grabbed
     # (AUDIO_DEVICE is a raw "plughw", not a software-mixed one) and one of
     # the two loses with "Device or resource busy" -- confirmed on-device.
-    print(f"[robot] Playing {os.path.basename(path)}.")
+    print(f"[MELVINN] Playing {os.path.basename(path)}.")
     _music_proc = subprocess.Popen(
         ["mpg123", "-q", "-a", AUDIO_DEVICE, path],
         stdout=subprocess.DEVNULL,
@@ -1476,6 +1476,29 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "remember",
+        "description": "Save a fact to your long-term memory so you recall it in "
+                       "future conversations. Use when the user tells you to "
+                       "remember something, shares a lasting preference, or when "
+                       "you learn something worth keeping (their name, how they "
+                       "like you to behave, facts about the robot or the world).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "fact": {"type": "string",
+                         "description": "The fact to remember, phrased so it "
+                                        "makes sense on its own later."},
+            },
+            "required": ["fact"],
+        },
+    },
+    {
+        "name": "forget_memory",
+        "description": "Erase everything in your long-term memory. Only use when "
+                       "the user explicitly asks you to forget everything.",
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
         "name": "set_effect",
         "description": "Layer a character sound effect over MELVINN's current "
                        "voice (works on any voice). Use for 'sound like a "
@@ -1673,7 +1696,55 @@ def run_tool(name: str, tool_input: dict) -> str:
         return arm_status()
     if name == "see":
         return robot_see()
+    if name == "remember":
+        return remember(tool_input["fact"])
+    if name == "forget_memory":
+        return forget_all()
     return f"Unknown tool: {name}"
+
+
+# ---------------------------------------------------------------------------
+# Memory — MELVINN remembers across conversations (the OpenClaw pattern)
+# ---------------------------------------------------------------------------
+# A plain Markdown file that gets loaded into the brain's system prompt at the
+# start of every session, so MELVINN "knows" what it learned in past chats. The
+# `remember` tool appends to it, so MELVINN can save things on its own.
+MEMORY_FILE = os.path.expanduser("~/melvinn_memory.md")
+
+
+def load_memory() -> str:
+    """Everything MELVINN has remembered so far (empty string if nothing)."""
+    try:
+        with open(MEMORY_FILE) as f:
+            return f.read().strip()
+    except OSError:
+        return ""
+
+
+def remember(fact: str) -> str:
+    """Save a fact to MELVINN's long-term memory (persists across chats)."""
+    fact = " ".join(fact.split())
+    if not fact:
+        return "There was nothing to remember."
+    from datetime import date
+    try:
+        first = not os.path.exists(MEMORY_FILE)
+        with open(MEMORY_FILE, "a") as f:
+            if first:
+                f.write("# MELVINN's memory\n\n")
+            f.write(f"- ({date.today().isoformat()}) {fact}\n")
+        return f"Got it — I'll remember that: {fact}"
+    except OSError as exc:
+        return f"I couldn't save that to memory ({exc})."
+
+
+def forget_all() -> str:
+    """Wipe MELVINN's memory."""
+    try:
+        os.remove(MEMORY_FILE)
+    except OSError:
+        pass
+    return "Okay, I cleared my memory."
 
 
 SYSTEM = (
@@ -1714,6 +1785,11 @@ SYSTEM = (
     "or when a look would help you act (checking a grab target, reading a "
     "label). look_for_object is only the colour-blob tracker for grabs; for "
     "real questions, see.\n\n"
+    "You DO have long-term memory across conversations: a `remember` tool "
+    "saves facts that are loaded back into this prompt at the start of every "
+    "future chat (shown under WHAT YOU REMEMBER). So if the user asks you to "
+    "remember something, actually call `remember` — never say you can't. "
+    "`forget_memory` clears it.\n\n"
     "You can run the robot's test scripts with run_script (grab test, "
     "distance monitor, vision test, arm test, ...) — they run in the "
     "background and 'stop' kills them. Use it when the user asks to run or "
@@ -1789,11 +1865,15 @@ def _trim_history(history: list) -> None:
 def claude_brain(user_text: str, history: list) -> str:
     history.append({"role": "user", "content": user_text})
     _trim_history(history)
+    mem = load_memory()
+    sys_prompt = SYSTEM + (
+        "\n\nWHAT YOU REMEMBER (from past chats — treat as true):\n" + mem
+        if mem else "")
     while True:
         resp = client.messages.create(
             model=MODEL,
             max_tokens=512,
-            system=SYSTEM,
+            system=sys_prompt,
             tools=TOOLS,
             # Auto-cache the conversation prefix (tools + system + history).
             # On Haiku the minimum cacheable prefix is 4096 tokens, so this
@@ -1827,6 +1907,15 @@ def local_brain(user_text: str) -> str:
     if "play" in t:
         query = re.sub(r"play\s*(a\s*song\s*)?", "", t, count=1).strip()
         return play_song(query)
+
+    # memory
+    if t.startswith("remember "):
+        return remember(user_text.strip()[9:].strip())
+    if "forget everything" in t or "clear your memory" in t or "forget your memory" in t:
+        return forget_all()
+    if "what do you remember" in t:
+        mem = load_memory()
+        return mem.replace("# MELVINN's memory", "").strip() or "I don't remember anything yet."
 
     # say
     if t.startswith("say "):
@@ -1996,7 +2085,7 @@ def play_sound(name: str) -> str:
     _voice = preset             # borrow the character voice just for the noise
     try:
         _say_espeak(text)       # espeak so pitch/speed apply, not piper
-        print(f"[robot] *{name}*")
+        print(f"[MELVINN] *{name}*")
     finally:
         _voice = saved
     return f"*{name}*"
@@ -2367,7 +2456,7 @@ def _say_espeak(text: str) -> None:
 
 
 def speak(text: str) -> None:
-    print(f"[robot] {text}")
+    print(f"[MELVINN] {text}")
     if not text.strip():
         return
     # Default is Piper (fast, light). sherpa-onnx neural voices are OPT-IN only
