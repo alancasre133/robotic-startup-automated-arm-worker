@@ -55,6 +55,7 @@ Setup (on the Pi):
 
 import difflib
 import json
+import math
 import os
 import re
 import shutil
@@ -238,6 +239,42 @@ _arm_current = {}
 SMOOTH_STEP = 1.0       # degrees per step when moving smoothly
 SMOOTH_DELAY = 0.02     # seconds between steps (0.02 * 90 steps ≈ 1.8s per 90°)
 MAX_NUDGE = 20.0        # cap a single nudge so moves stay gentle, never abrupt
+POSE_TIME = 1.1         # seconds a whole-arm coordinated move takes
+POSE_STEPS = 55         # interpolation steps across a coordinated move
+
+
+def _ease(t: float) -> float:
+    """Ease-in-ease-out (raised cosine): 0->1 with a slow start and slow stop,
+    so a move accelerates and decelerates smoothly instead of lurching."""
+    return 0.5 - 0.5 * math.cos(math.pi * max(0.0, min(1.0, t)))
+
+
+def move_joints(targets: dict, seconds: float = POSE_TIME,
+                steps: int = POSE_STEPS) -> str:
+    """Move several joints to their targets TOGETHER — all interpolate in
+    parallel over the same time with ease-in/out, so the whole arm flows to
+    the pose as one fluid motion instead of one joint finishing before the
+    next starts. Falls back to per-joint if the arm isn't available."""
+    if not _ARM_LIBS_AVAILABLE or _ensure_arm() is None:
+        return "Arm not connected."
+    goals, starts = {}, {}
+    for joint, angle in targets.items():
+        if joint not in ARM_JOINTS:
+            continue
+        goals[joint] = max(0.0, min(180.0, float(angle)))
+        starts[joint] = _arm_current.get(joint, ARM_CENTER_ANGLES[joint])
+    if not goals:
+        return "No valid joints to move."
+    dt = seconds / steps
+    for i in range(1, steps + 1):
+        e = _ease(i / steps)
+        for joint, goal in goals.items():
+            _arm_servos[joint].angle = starts[joint] + (goal - starts[joint]) * e
+        sleep(dt)
+    for joint, goal in goals.items():          # land exactly on target
+        _arm_servos[joint].angle = goal
+        _arm_current[joint] = goal
+    return "Arm moved to " + ", ".join(f"{j} {a:.0f}" for j, a in goals.items()) + "."
 
 
 def robot_move_arm(joint: str, angle: float, smooth: bool = False) -> str:
@@ -333,14 +370,18 @@ STOP_CM = 5.0           # never drive forward when something is this close
 def arm_pose(name: str, smooth: bool = True) -> str:
     """Move the whole arm to a named pose (home/ready/reach/lift/drop).
 
-    Smooth by default — each joint glides 1 degree at a time, one joint after
-    another, so the whole arm moves calmly.
+    Smooth by default — all joints interpolate TOGETHER with ease-in/out
+    (move_joints), so the arm flows to the pose as one coordinated motion
+    rather than one joint at a time.
     """
     pose = ARM_POSES.get(name)
     if pose is None:
         return f"Unknown arm pose: {name}. Try home, ready, reach, lift, or drop."
-    for joint, angle in pose.items():
-        robot_move_arm(joint, angle, smooth=smooth)
+    if smooth:
+        move_joints(pose)
+    else:
+        for joint, angle in pose.items():
+            robot_move_arm(joint, angle, smooth=False)
     return f"Arm at {name}."
 
 
@@ -1382,6 +1423,26 @@ TOOLS = [
         },
     },
     {
+        "name": "move_arm_smooth",
+        "description": "Move SEVERAL arm joints at once to target angles, all "
+                       "gliding together with ease-in/out so the arm flows as "
+                       "one fluid motion. Prefer this over multiple move_arm "
+                       "calls whenever you're posing more than one joint — it "
+                       "looks natural instead of jerky (one joint after "
+                       "another). Give only the joints you want to move.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "base": {"type": "number"},
+                "shoulder": {"type": "number"},
+                "elbow": {"type": "number"},
+                "wrist": {"type": "number"},
+                "wrist_rotate": {"type": "number"},
+                "gripper": {"type": "number"},
+            },
+        },
+    },
+    {
         "name": "play_song",
         "description": "Play a song from the robot's music library.",
         "input_schema": {
@@ -1714,6 +1775,10 @@ def run_tool(name: str, tool_input: dict) -> str:
         return robot_drive(tool_input["direction"], tool_input.get("seconds", 1.0))
     if name == "move_arm":
         return robot_move_arm(tool_input["joint"], tool_input["angle"])
+    if name == "move_arm_smooth":
+        targets = {j: v for j, v in tool_input.items()
+                   if j in ARM_JOINTS and v is not None}
+        return move_joints(targets) if targets else "Tell me which joints to move."
     if name == "play_song":
         return play_song(tool_input.get("query", ""))
     if name == "download_song":
@@ -1861,7 +1926,12 @@ SYSTEM = (
     "small relative values (+1/-1 for 'a degree', +5/-5 for 'a bit') instead "
     "of absolute move_arm. Check arm_status when you need to know where the "
     "joints are. Keep responses ultra-short during fine guidance ('wrist 91.') "
-    "so the user can keep directing quickly.\n\n"
+    "so the user can keep directing quickly.\n"
+    "SMOOTH WHOLE-ARM MOVES: when you're posing more than one joint at once "
+    "(reaching, gestures, waving), use move_arm_smooth with all the joints in "
+    "ONE call — they glide together and the motion looks natural. Don't fire "
+    "several separate move_arm calls for a single pose; that moves one joint "
+    "at a time and looks jerky.\n\n"
     "REACHING FOR SOMETHING YOURSELF (closed loop — YOU fly every servo). Your "
     "arm has SIX joints (each 0-180 deg) and each does a DIFFERENT job — a real "
     "reach needs SEVERAL of them together, not just one:\n"
