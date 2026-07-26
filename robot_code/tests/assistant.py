@@ -650,6 +650,56 @@ def grab_sequence(color: str = "red", max_steps: int = 12) -> str:
         _close_camera()    # free the camera for the stream service / next grab
 
 
+def smart_grab(color: str = "red") -> str:
+    """Vision-GUIDED grab: instead of always reaching dead-ahead, MELVINN reads
+    where the camera sees the object and swings the arm's BASE to face it, then
+    reaches / grips / lifts / verifies. The arm 'aims itself' at the object's
+    left-right position. Falls back to the fixed reach pose if it can't see it.
+
+    Decision logic (which way / what angles) lives in controllers/arm_controller;
+    this just executes it. No wheels — works within arm's reach, so it's safe to
+    run with the drivetrain unplugged.
+    """
+    from controllers import arm_controller as ac
+    chirp("search")
+    speak(f"Looking for the {color} object so I can aim at it.")
+    center_arm()
+    arm_pose("ready")
+    gripper("open")
+    try:
+        for attempt in range(1, GRAB_ATTEMPTS + 1):
+            if _stopped():
+                return "Stopped."
+            r = look_for_object(color)
+            pre_area = r.get("area_frac", 0.0) if r.get("seen") else 0.0
+            if r.get("seen"):
+                base = ac.bearing_to_base(r["offset"])
+                speak(f"There it is — aiming {ac.aim_side(base)}.")
+                plan = ac.plan_reach(ARM_POSES["reach"], base)
+            else:
+                speak("I can't see it, reaching straight ahead.")
+                plan = ARM_POSES["reach"]
+
+            for joint, angle in plan.items():        # aim + reach in one move
+                robot_move_arm(joint, angle, smooth=True)
+            if _stopped():
+                return "Stopped."
+            gripper("close")
+            arm_pose("lift")
+
+            if _verify_grab(color, pre_area):
+                chirp("happy")
+                return "Got it." if attempt == 1 else f"Got it on try {attempt}."
+            if attempt < GRAB_ATTEMPTS:
+                chirp("sad")
+                speak("Missed it, trying again.")
+                gripper("open")
+                arm_pose("ready")
+        return "I aimed and tried but couldn't grab it."
+    finally:
+        _close_camera()
+
+
 def release_sequence() -> str:
     """Put down whatever the gripper is holding."""
     arm_pose("drop")
@@ -1476,6 +1526,23 @@ TOOLS = [
         "input_schema": {"type": "object", "properties": {}},
     },
     {
+        "name": "smart_grab",
+        "description": "Pick up an object by AIMING the arm at where the camera "
+                       "sees it (swings the base to the object's bearing, then "
+                       "reaches/grips/lifts/verifies) — smarter than a fixed "
+                       "pose. Works within arm's reach, no driving. Use for "
+                       "'pick up / grab the X' when the object is in front but "
+                       "may be off to one side.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "color": {"type": "string",
+                          "enum": ["red", "green", "blue", "yellow"]},
+            },
+            "required": ["color"],
+        },
+    },
+    {
         "name": "remember",
         "description": "Save a fact to your long-term memory so you recall it in "
                        "future conversations. Use when the user tells you to "
@@ -1700,6 +1767,10 @@ def run_tool(name: str, tool_input: dict) -> str:
         return remember(tool_input["fact"])
     if name == "forget_memory":
         return forget_all()
+    if name == "smart_grab":
+        color = tool_input.get("color", "red")
+        return start_action(f"aiming for the {color} object",
+                            lambda: smart_grab(color))
     return f"Unknown tool: {name}"
 
 
