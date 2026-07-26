@@ -237,6 +237,7 @@ def _ensure_arm():
 _arm_current = {}
 SMOOTH_STEP = 1.0       # degrees per step when moving smoothly
 SMOOTH_DELAY = 0.02     # seconds between steps (0.02 * 90 steps ≈ 1.8s per 90°)
+MAX_NUDGE = 20.0        # cap a single nudge so moves stay gentle, never abrupt
 
 
 def robot_move_arm(joint: str, angle: float, smooth: bool = False) -> str:
@@ -272,9 +273,9 @@ def robot_move_arm(joint: str, angle: float, smooth: bool = False) -> str:
 def nudge_arm(joint: str, degrees: float) -> str:
     """Move one joint BY a relative amount — surgical fine positioning.
 
-    Steps from the joint's last commanded angle (its center angle if it
-    hasn't been commanded yet this session). +/-1 degree is the finest
-    step the servos resolve.
+    GLIDES to the new angle (never snaps) and caps a single move at MAX_NUDGE
+    degrees, so motion stays gentle even if a big step is requested. Steps from
+    the joint's last commanded angle (its centre angle if it hasn't moved yet).
     """
     if not _ARM_LIBS_AVAILABLE:
         return "Arm libraries not installed — see docs/arm-setup.md"
@@ -282,13 +283,16 @@ def nudge_arm(joint: str, degrees: float) -> str:
         return "Arm not connected (PCA9685 not found on I2C) — check wiring."
     if joint not in ARM_JOINTS:
         return f"Unknown joint: {joint}. Joints: {', '.join(ARM_JOINTS)}."
+    asked = float(degrees)
+    degrees = max(-MAX_NUDGE, min(MAX_NUDGE, asked))     # keep moves gentle
     cur = _arm_current.get(joint, ARM_CENTER_ANGLES[joint])
     target = max(0.0, min(180.0, cur + degrees))
-    _arm_servos[joint].angle = target
-    _arm_current[joint] = target
     if target == cur:
         return f"{joint} is already at its {cur:.0f}-degree limit."
-    return f"{joint}: {cur:.0f} -> {target:.0f} degrees ({target - cur:+.1f})."
+    _arm_current.setdefault(joint, cur)                  # so it glides, not snaps
+    robot_move_arm(joint, target, smooth=True)           # ease in, don't jump
+    capped = " (capped to 20)" if abs(asked) > MAX_NUDGE else ""
+    return f"{joint}: {cur:.0f} -> {target:.0f} degrees ({target - cur:+.1f}){capped}."
 
 
 def arm_status() -> str:
