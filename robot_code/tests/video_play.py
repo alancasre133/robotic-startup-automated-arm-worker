@@ -37,11 +37,15 @@ vf = (f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
       f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,fps={FPS}")
 nice = ["nice", "-n", "15"] if shutil.which("nice") else []
 proc = subprocess.Popen(
-    [*nice, "ffmpeg", "-loglevel", "error", "-threads", "2", "-re", "-i", path,
-     "-map", "0:v:0", "-vf", vf,
+    # -nostdin: DON'T read the terminal's stdin. Without it ffmpeg listens for
+    # interactive keypresses and STEALS the keystrokes meant for the
+    # assistant's input() prompt -- the real "can't type while a video plays"
+    # bug. stdin=DEVNULL belt-and-suspenders in case the flag is unsupported.
+    [*nice, "ffmpeg", "-nostdin", "-loglevel", "error", "-threads", "2",
+     "-re", "-i", path, "-map", "0:v:0", "-vf", vf,
      "-f", "rawvideo", "-pix_fmt", "rgb565be", "pipe:1",
      "-map", "0:a:0?", "-f", "alsa", AUDIO_DEVICE],
-    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
 )
 
 

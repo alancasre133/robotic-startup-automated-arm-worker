@@ -1016,6 +1016,7 @@ def _play_file(path: str) -> str:
     print(f"[MELVINN] Playing {os.path.basename(path)}.")
     _music_proc = subprocess.Popen(
         ["mpg123", "-q", "-a", AUDIO_DEVICE, path],
+        stdin=subprocess.DEVNULL,       # don't let it read the terminal's keys
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )
