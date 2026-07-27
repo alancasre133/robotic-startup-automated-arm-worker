@@ -1332,22 +1332,41 @@ VIDEO_FPS = 12          # decode/display rate; SPI at 32 MHz sustains this fine
 
 
 def download_video(query: str) -> str:
-    """Download a video (<=360p, single-file format -- no merging needed)."""
+    """Download a SHORT (<= ~4 min), small (<=60MB) <=360p clip for the face
+    screen. Caps duration/size so a long compilation can't hang the download,
+    and searches a few results to skip anything too long. Tries player clients
+    in order to dodge YouTube's 403s from a missing JS runtime."""
     if not shutil.which("yt-dlp"):
         return "yt-dlp is not installed."
     os.makedirs(VIDEO_DIR, exist_ok=True)
-    try:
-        subprocess.run(
-            ["yt-dlp", "-f", "b[height<=360]",
-             "--output", os.path.join(VIDEO_DIR, "%(title)s.%(ext)s"),
-             f"ytsearch1:{query}"],
-            check=True, timeout=300,
-        )
-    except subprocess.TimeoutExpired:
-        return "The download took too long and was cancelled."
-    except subprocess.CalledProcessError as exc:
-        return f"Download failed: {exc}"
-    return "Downloaded! Ask me to play it and I'll show it on my face."
+    common = [
+        "-f", "b[height<=360][filesize<60M]/w[height<=360]/b[height<=480]",
+        "--match-filter", "duration < 240 & duration > 0",  # skip long comps
+        "--max-filesize", "60M",
+        "--no-playlist",
+        "--output", os.path.join(VIDEO_DIR, "%(title)s.%(ext)s"),
+    ]
+    # search 5 so the match-filter can skip long ones and still find a hit
+    target = f"ytsearch5:{query}"
+    last = ""
+    for client in ("web", "android", "tv"):        # first that works wins
+        try:
+            r = subprocess.run(
+                ["yt-dlp", *common,
+                 "--extractor-args", f"youtube:player_client={client}",
+                 target],
+                capture_output=True, text=True, timeout=240,
+            )
+            if r.returncode == 0:
+                return "Downloaded! Ask me to play it and I'll show it on my face."
+            last = (r.stderr or "").strip().splitlines()[-1:] or [""]
+            last = last[0]
+        except subprocess.TimeoutExpired:
+            return "The download took too long and was cancelled — try a shorter clip."
+    if "403" in last or "JavaScript" in last:
+        return ("YouTube is blocking the download (needs a yt-dlp update). "
+                "On the Pi run: pip install -U --break-system-packages yt-dlp")
+    return f"Download failed: {last or 'unknown error'}"
 
 
 def _find_video(query: str):
