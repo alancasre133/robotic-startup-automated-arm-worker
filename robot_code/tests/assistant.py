@@ -1143,67 +1143,107 @@ def _ensure_face():
     return _face
 
 
-def _face_frame(openness=1.0, pupil_dx=0, pupil_dy=0, mouth="smile",
-                hearts=False, zzz=False):
-    """Draw one face frame. Returns False when the screen is unavailable."""
+# --- MELVINN's signature face: glowing dot-matrix cyan eyes on a dark panel -
+FACE_BG = (6, 10, 16)           # near-black panel
+CYAN = (60, 210, 255)           # eye grid colour
+CYAN_DIM = (18, 70, 95)         # dim grid lines
+WARM = (255, 140, 40)           # angry tint
+PINK = (255, 90, 150)           # love tint
+GRID = 6                        # dot-matrix cell size (px)
+
+
+def _grid_eye(img, cx, cy, w, h, color, dim, core_dx=0, core_dy=0,
+              tilt=0, radius_frac=0.28):
+    """Paste one rounded rectangular 'LED matrix' eye: a fine grid glowing
+    brighter toward a movable core (the gaze), inside a rounded mask."""
+    from PIL import Image, ImageDraw
+    w, h = max(6, int(w)), max(6, int(h))
+    eye = Image.new("RGB", (w, h), FACE_BG)
+    ed = ImageDraw.Draw(eye)
+    ccx, ccy = w / 2 + core_dx, h / 2 + core_dy
+    maxd = (w ** 2 + h ** 2) ** 0.5 / 2
+    for gx in range(0, w, GRID):
+        for gy in range(0, h, GRID):
+            # brightness falls off from the core -> matrix glow
+            dist = (((gx - ccx) ** 2 + (gy - ccy) ** 2) ** 0.5) / maxd
+            t = max(0.0, 1.0 - dist * 1.15)
+            r = int(dim[0] + (color[0] - dim[0]) * t)
+            g = int(dim[1] + (color[1] - dim[1]) * t)
+            b = int(dim[2] + (color[2] - dim[2]) * t)
+            ed.rectangle((gx, gy, gx + GRID - 2, gy + GRID - 2), fill=(r, g, b))
+    mask = Image.new("L", (w, h), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        (0, 0, w - 1, h - 1), radius=int(min(w, h) * radius_frac), fill=255)
+    if tilt:
+        eye = eye.rotate(tilt, expand=True, fillcolor=FACE_BG)
+        mask = mask.rotate(tilt, expand=True, fillcolor=0)
+    img.paste(eye, (int(cx - eye.width / 2), int(cy - eye.height / 2)), mask)
+
+
+def _face_frame(openness=1.0, pupil_dx=0, pupil_dy=0, mouth=None,
+                hearts=False, zzz=False, tilt=0, color=None, brow=None):
+    """Draw MELVINN's face: two cyan dot-matrix eyes on a dark panel. Params
+    modulate that signature look for expressions (openness, gaze, tilt, tint,
+    brows, optional mouth) — the grid eyes are always the identity. Returns
+    False when the screen is unavailable."""
     face = _ensure_face()
     if face is None:
         return False
     from PIL import Image, ImageDraw, ImageFont
     W, H = face.width, face.height
-    img = Image.new("RGB", (W, H), (20, 20, 30))
+    col = color or CYAN
+    img = Image.new("RGB", (W, H), FACE_BG)
     d = ImageDraw.Draw(img)
-    EYE, IRIS = (230, 230, 255), (20, 60, 200)
-    for cx in (W // 3, 2 * W // 3):
-        cy = H // 2 - 15
-        ry = max(4, int(55 * openness))
-        if openness < 0.15:
-            d.line((cx - 45, cy, cx + 45, cy), fill=EYE, width=10)
-        elif hearts:
-            RED = (255, 60, 90)
-            d.ellipse((cx - 30, cy - 32, cx + 2, cy), fill=RED)
-            d.ellipse((cx - 2, cy - 32, cx + 30, cy), fill=RED)
-            d.polygon([(cx - 27, cy - 8), (cx + 27, cy - 8), (cx, cy + 34)], fill=RED)
+    ew, eh = 96, int(84 * max(0.08, openness))
+    cy = H // 2 - 8
+    for i, cx in enumerate((W // 3 + 6, 2 * W // 3 - 6)):
+        sgn = 1 if i == 0 else -1
+        if hearts:
+            _grid_eye(img, cx, cy, ew, eh, PINK, (70, 20, 45),
+                      core_dx=pupil_dx, core_dy=pupil_dy)
+        elif openness < 0.16:                 # closed / blink -> a bright bar
+            d.line((cx - ew // 2, cy, cx + ew // 2, cy), fill=col, width=8)
         else:
-            d.ellipse((cx - 45, cy - ry, cx + 45, cy + ry), fill=EYE)
-            pry = min(22, ry - 2)
-            px, py = cx + pupil_dx, cy + pupil_dy
-            d.ellipse((px - 18, py - pry, px + 18, py + pry), fill=IRIS)
-    mx, my = W // 2, H - 60
+            _grid_eye(img, cx, cy, ew, eh, col, CYAN_DIM,
+                      core_dx=pupil_dx, core_dy=pupil_dy, tilt=sgn * tilt)
+        if brow:                              # angled brow bars over each eye
+            by = cy - eh // 2 - 10
+            d.line((cx - 44, by - brow * sgn, cx + 44, by + brow * sgn),
+                   fill=col, width=9)
+    mx, my = W // 2, H - 30
     if mouth == "smile":
-        d.arc((mx - 40, my - 25, mx + 40, my + 25), start=20, end=160, fill=EYE, width=8)
+        d.arc((mx - 34, my - 22, mx + 34, my + 20), 20, 160, fill=col, width=7)
     elif mouth == "frown":
-        d.arc((mx - 40, my - 5, mx + 40, my + 45), start=200, end=340, fill=EYE, width=8)
+        d.arc((mx - 34, my - 2, mx + 34, my + 40), 200, 340, fill=col, width=7)
     elif mouth == "o":
-        d.ellipse((mx - 18, my - 18, mx + 18, my + 18), outline=EYE, width=8)
-    elif mouth == "flat":
-        d.line((mx - 35, my, mx + 35, my), fill=EYE, width=8)
+        d.ellipse((mx - 14, my - 14, mx + 14, my + 14), outline=col, width=7)
     if zzz:
         try:
             f = ImageFont.truetype(
-                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 30)
+                "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 28)
         except OSError:
             f = ImageFont.load_default()
-        d.text((W - 55, 25), "Z z", font=f, fill=EYE)
+        d.text((W - 62, 16), "Z z", font=f, fill=col)
     face.display(img)
     return True
 
 
 _EXPRESSIONS = {
-    "happy":     dict(mouth="smile"),
-    "neutral":   dict(mouth="flat"),
-    "sad":       dict(openness=0.7, pupil_dy=12, mouth="frown"),
-    "thinking":  dict(pupil_dx=-16, pupil_dy=-12, mouth="flat"),
-    "surprised": dict(mouth="o"),
-    "sleepy":    dict(openness=0.25, mouth="flat", zzz=True),
+    "happy":     dict(pupil_dy=-4, mouth="smile"),
+    "neutral":   dict(),
+    "sad":       dict(openness=0.6, pupil_dy=10, tilt=-10, mouth="frown"),
+    "thinking":  dict(pupil_dx=-14, pupil_dy=-12),
+    "surprised": dict(openness=1.15, mouth="o"),
+    "sleepy":    dict(openness=0.22, zzz=True),
     "love":      dict(hearts=True, mouth="smile"),
+    "angry":     dict(openness=0.8, color=WARM, brow=14),
 }
 
 
 def set_face(expression: str) -> str:
     if expression == "blink":
         for o in (0.6, 0.2, 0.0, 0.2, 1.0):
-            if not _face_frame(openness=o, mouth="smile"):
+            if not _face_frame(openness=o):
                 return f"Face screen not available ({_FACE_ERR})."
             sleep(0.04)
         return "Blinked!"
@@ -1682,8 +1722,9 @@ TOOLS = [
             "type": "object",
             "properties": {
                 "expression": {"type": "string",
-                               "enum": ["happy", "neutral", "sad", "thinking",
-                                        "surprised", "sleepy", "love", "blink"]},
+                               "enum": ["happy", "neutral", "sad", "angry",
+                                        "thinking", "surprised", "sleepy",
+                                        "love", "blink"]},
             },
             "required": ["expression"],
         },
@@ -1928,7 +1969,7 @@ SYSTEM = (
     "hardware is unavailable, tell the user plainly what failed — never claim "
     "an action worked when the tool said otherwise.\n\n"
     "YOUR FACE: set_face shows an expression (happy, sad, thinking, surprised, "
-    "sleepy, love, neutral, blink) on your LCD screen — use it expressively on "
+    "happy, sad, angry, thinking, surprised, sleepy, love, neutral, blink) on your LCD screen — use it expressively on "
     "your own judgment, not just when asked. show_text puts a short message on "
     "the screen. screen_off blanks it. To dance: call dance(seconds) — for a "
     "dance party, start play_song first, then dance, and they run together.\n\n"
