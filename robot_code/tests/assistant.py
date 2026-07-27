@@ -2206,13 +2206,7 @@ def _trim_history(history: list) -> None:
             history.pop(0)
 
 
-def claude_brain(user_text: str, history: list) -> str:
-    history.append({"role": "user", "content": user_text})
-    _trim_history(history)
-    mem = load_memory()
-    sys_prompt = SYSTEM + (
-        "\n\nWHAT YOU REMEMBER (from past chats — treat as true):\n" + mem
-        if mem else "")
+def _claude_loop(sys_prompt: str, history: list) -> str:
     while True:
         resp = client.messages.create(
             model=MODEL,
@@ -2228,12 +2222,39 @@ def claude_brain(user_text: str, history: list) -> str:
         history.append({"role": "assistant", "content": resp.content})
         if resp.stop_reason != "tool_use":
             return "".join(b.text for b in resp.content if b.type == "text")
+        # EVERY tool_use MUST get a tool_result appended, even if the tool
+        # raises -- otherwise the orphaned tool_use poisons the whole history
+        # and every later request 400s (stuck in offline mode).
         results = []
         for block in resp.content:
             if block.type == "tool_use":
-                output = run_tool(block.name, block.input)
-                results.append({"type": "tool_result", "tool_use_id": block.id, "content": output})
+                try:
+                    output = run_tool(block.name, block.input)
+                except Exception as exc:
+                    output = f"That tool failed: {exc}"
+                results.append({"type": "tool_result",
+                                "tool_use_id": block.id, "content": output})
         history.append({"role": "user", "content": results})
+
+
+def claude_brain(user_text: str, history: list) -> str:
+    history.append({"role": "user", "content": user_text})
+    _trim_history(history)
+    mem = load_memory()
+    sys_prompt = SYSTEM + (
+        "\n\nWHAT YOU REMEMBER (from past chats — treat as true):\n" + mem
+        if mem else "")
+    try:
+        return _claude_loop(sys_prompt, history)
+    except Exception as exc:
+        # Self-heal a malformed tool_use/tool_result history: reset to just
+        # this turn and retry once, so a single bad turn can't leave MELVINN
+        # permanently stuck in offline mode. Other errors propagate normally.
+        msg = str(exc)
+        if "tool_use" in msg and "tool_result" in msg:
+            history[:] = [{"role": "user", "content": user_text}]
+            return _claude_loop(sys_prompt, history)
+        raise
 
 
 # ---------------------------------------------------------------------------
