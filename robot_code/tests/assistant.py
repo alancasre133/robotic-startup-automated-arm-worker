@@ -119,6 +119,7 @@ if anthropic is not None and os.environ.get("ANTHROPIC_API_KEY"):
 # Wiring lives in README "Wiring reference -> Drive"; bring-up is bts7960_test.py.
 motor_left = motor_right = None
 _music_proc = None          # currently playing mpg123 process
+_video_proc = None          # currently playing video ffmpeg process
 
 # Jab the motors a few times before steady drive to break static friction on a
 # heavy/top-heavy bot. Needed on the L9110S, where breakaway torque was ~0.4-0.6x
@@ -920,6 +921,25 @@ def _stop_music() -> str:
     return "Nothing is playing."
 
 
+def _stop_media() -> None:
+    """Kill any music AND any playing video ffmpeg — used on stop/quit so the
+    audio device and screen are freed immediately and nothing is orphaned."""
+    global _video_proc
+    _stop_music()
+    if _video_proc is not None and _video_proc.poll() is None:
+        _video_proc.terminate()
+        try:
+            _video_proc.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            _video_proc.kill()
+    _video_proc = None
+
+
+def _media_playing() -> bool:
+    return ((_music_proc is not None and _music_proc.poll() is None) or
+            (_video_proc is not None and _video_proc.poll() is None))
+
+
 def _search_youtube(query: str, max_results: int = 3) -> list[str]:
     """Return up to max_results song titles from YouTube without downloading."""
     if not shutil.which("yt-dlp"):
@@ -1402,6 +1422,7 @@ def video_routine(path: str) -> str:
     frame_bytes = w * h * 2
     vf = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
           f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={VIDEO_FPS}")
+    global _video_proc
     proc = subprocess.Popen(
         ["ffmpeg", "-loglevel", "error", "-re", "-i", path,
          "-map", "0:v:0", "-vf", vf,
@@ -1409,6 +1430,7 @@ def video_routine(path: str) -> str:
          "-map", "0:a:0?", "-f", "alsa", AUDIO_DEVICE],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
     )
+    _video_proc = proc          # so stop/quit can kill it from the main thread
     frames = 0
     try:
         while not _stopped():
@@ -1424,6 +1446,7 @@ def video_routine(path: str) -> str:
                 proc.wait(timeout=2)
             except subprocess.TimeoutExpired:
                 proc.kill()
+        _video_proc = None
     _face_frame(mouth="smile")
     name = os.path.basename(path)
     if frames == 0:
@@ -2322,6 +2345,7 @@ def think(user_text: str, history: list) -> str:
     t = user_text.lower()
     if "stop" in t and "music" not in t:
         was_busy = stop_action()        # interrupt any background action
+        _stop_media()                   # kill any song/video immediately too
         robot_drive("stop")
         return "Stopping." if was_busy else "Stopped."
     if action_running():
@@ -2752,6 +2776,11 @@ def speak(text: str) -> None:
     print(f"[MELVINN] {text}")
     if not text.strip():
         return
+    # Don't fight playing media for the one exclusive audio device: espeak/
+    # aplay would block or error with "Device or resource busy". Show the
+    # text, skip the voice while a song or video is playing.
+    if _media_playing():
+        return
     # Default is Piper (fast, light). sherpa-onnx neural voices are OPT-IN only
     # -- the Kokoro model needs ~900MB and swap-thrashes a 1GB Pi 3, so we never
     # load it for the default voice; only when a sherpa speaker is explicitly
@@ -2973,6 +3002,8 @@ def main() -> None:
             if not user_text:
                 continue
             if user_text.lower() in ("quit", "exit", "q"):
+                stop_action()          # signal any background action to end
+                _stop_media()          # and kill music/video now, don't hang
                 break
 
             reply = think(user_text, history)
@@ -2982,7 +3013,8 @@ def main() -> None:
     except (KeyboardInterrupt, EOFError):
         pass
     finally:
-        _stop_music()
+        stop_action()
+        _stop_media()
         if motor_left is not None:
             motor_left.stop()
         if motor_right is not None:
