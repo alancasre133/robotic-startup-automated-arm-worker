@@ -1359,7 +1359,9 @@ def dance_routine(seconds: float = 15.0) -> str:
 # Video — yt-dlp download + playback on the LCD face screen with audio
 # ---------------------------------------------------------------------------
 VIDEO_DIR = os.path.expanduser("~/videos")
-VIDEO_FPS = 12          # decode/display rate; SPI at 32 MHz sustains this fine
+VIDEO_FPS = 8           # decode/display rate. Kept modest so the Pi 3A+ isn't
+                        # pegged during playback (H.264 decode + per-frame SPI
+                        # blit) -- a pegged Pi makes the SSH terminal unresponsive.
 
 
 def download_video(query: str) -> str:
@@ -1434,9 +1436,12 @@ def video_routine(path: str) -> str:
     vf = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
           f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={VIDEO_FPS}")
     global _video_proc
+    # 'nice' the decoder to low priority + cap its threads so it can't starve
+    # the interactive shell / main thread on the little Pi 3A+.
+    nice = ["nice", "-n", "15"] if shutil.which("nice") else []
     proc = subprocess.Popen(
-        ["ffmpeg", "-loglevel", "error", "-re", "-i", path,
-         "-map", "0:v:0", "-vf", vf,
+        [*nice, "ffmpeg", "-loglevel", "error", "-threads", "2", "-re",
+         "-i", path, "-map", "0:v:0", "-vf", vf,
          "-f", "rawvideo", "-pix_fmt", "rgb565be", "pipe:1",
          "-map", "0:a:0?", "-f", "alsa", AUDIO_DEVICE],
         stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
