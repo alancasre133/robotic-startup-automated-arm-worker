@@ -98,6 +98,12 @@ MODEL          = "claude-haiku-4-5"
 AUDIO_DEVICE   = "plughw:1,0"          # USB speakerphone (card 1)
 MIC_DEVICE     = "plughw:1,0"          # same device, via arecord (see transcribe())
 SAMPLE_RATE    = 16000
+# Write TTS temp WAVs to RAM (/dev/shm), NOT the SD card. On a flaky/corrupt
+# card, a wav written then read back through bad flash plays as garbled
+# "radio interference" speech; RAM avoids that entirely and is faster too.
+# Falls back to the default temp dir if /dev/shm isn't available.
+_AUDIO_TMP = ("/dev/shm" if os.path.isdir("/dev/shm")
+              and os.access("/dev/shm", os.W_OK) else None)
 VOSK_MODEL_DIR = os.path.expanduser("~/vosk-model")
 MUSIC_DIR      = os.path.expanduser("~/music")
 PIPER_MODEL    = os.environ.get("PIPER_MODEL", os.path.expanduser("~/piper/voice.onnx"))
@@ -2603,7 +2609,7 @@ def _say_sherpa(text: str) -> bool:
         import soundfile as sf
         import numpy as np
         audio = eng.generate(text, sid=sid, speed=1.0)
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=_AUDIO_TMP) as f:
             wav = f.name
         sf.write(wav, np.array(audio.samples, dtype="float32"), audio.sample_rate)
         _play_wav(wav)
@@ -2724,7 +2730,7 @@ def _play_wav(wav: str) -> None:
     if chain and shutil.which("sox"):
         out = None
         try:
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=_AUDIO_TMP) as f:
                 out = f.name
             # sox in.wav out.wav <effect chain...>
             subprocess.run(["sox", wav, out] + chain.split(),
@@ -2754,7 +2760,7 @@ def _say_kokoro(text: str) -> bool:
         try:
             import soundfile as sf
             samples, sr = eng.create(text, voice=voice, speed=1.0, lang="en-us")
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=_AUDIO_TMP) as f:
                 wav = f.name
             sf.write(wav, samples, sr)
             _play_wav(wav)
@@ -2778,7 +2784,7 @@ def _say_kokoro(text: str) -> bool:
                                headers={"Content-Type": "application/json"})
             with _url.urlopen(req, timeout=15) as resp:
                 audio = resp.read()
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=_AUDIO_TMP) as f:
                 wav = f.name
                 f.write(audio)
             _play_wav(wav)
@@ -2806,7 +2812,7 @@ def _say_piper(text: str) -> bool:
         return False
     wav = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=_AUDIO_TMP) as f:
             wav = f.name
         subprocess.run(["piper", "--model", model, "--output_file", wav],
                        input=text.encode(), stdout=subprocess.DEVNULL,
@@ -2825,7 +2831,7 @@ def _say_espeak(text: str) -> None:
     voice, pitch, speed = VOICES.get(_voice, VOICES["melvinn"])
     wav = None
     try:
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=_AUDIO_TMP) as f:
             wav = f.name
         # Write to a wav so the SoX effect layer can process it (same path as
         # piper). -w = write to file instead of playing directly.
