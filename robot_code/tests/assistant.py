@@ -1163,8 +1163,11 @@ _FACE_ERR = None
 
 
 def _ensure_face():
-    """Connect to the face screen on first use (mirrors _ensure_arm)."""
+    """Connect to the face screen on first use (mirrors _ensure_arm). While a
+    video subprocess owns the panel, defer — the child holds the SPI/GPIO."""
     global _face, _FACE_ERR
+    if _video_proc is not None and _video_proc.poll() is None:
+        return None
     if _face is None and _FACE_ERR is None:
         try:
             from st7789_raw import ST7789Raw
@@ -1172,6 +1175,22 @@ def _ensure_face():
         except Exception as exc:
             _FACE_ERR = str(exc)
     return _face
+
+
+def _release_face() -> None:
+    """Close our LCD handles so a child (the video player) can claim the SPI +
+    DC/RST pins. gpiozero holds pins exclusively; re-inits lazily afterwards."""
+    global _face, _FACE_ERR
+    if _face is not None:
+        for h in (getattr(_face, "_dc", None), getattr(_face, "_rst", None),
+                  getattr(_face, "_spi", None)):
+            try:
+                if h is not None:
+                    h.close()
+            except Exception:
+                pass
+    _face = None
+    _FACE_ERR = None
 
 
 # --- MELVINN's signature face: glowing dot-matrix cyan eyes on a dark panel -
@@ -1419,67 +1438,32 @@ def _find_video(query: str):
     return None
 
 
-def video_routine(path: str) -> str:
-    """Play a video on the face screen; audio to the USB speaker. One ffmpeg
-    process feeds both outputs, so A/V stay on the same clock: video decoded
-    straight to RGB565 frames on stdout (blitted raw to the panel), audio to
-    ALSA. Runs as a background action -- 'stop' interrupts it."""
-    face = _ensure_face()
-    if face is None:
-        return f"My face screen isn't available ({_FACE_ERR})."
-    if not shutil.which("ffmpeg"):
-        return "ffmpeg is not installed."
-    sleep(2.5)          # let the spoken acknowledgement finish before ffmpeg
-    _stop_music()       # grabs the same exclusive ALSA device
-    w, h = face.width, face.height
-    frame_bytes = w * h * 2
-    vf = (f"scale={w}:{h}:force_original_aspect_ratio=decrease,"
-          f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,fps={VIDEO_FPS}")
-    global _video_proc
-    # 'nice' the decoder to low priority + cap its threads so it can't starve
-    # the interactive shell / main thread on the little Pi 3A+.
-    nice = ["nice", "-n", "15"] if shutil.which("nice") else []
-    proc = subprocess.Popen(
-        [*nice, "ffmpeg", "-loglevel", "error", "-threads", "2", "-re",
-         "-i", path, "-map", "0:v:0", "-vf", vf,
-         "-f", "rawvideo", "-pix_fmt", "rgb565be", "pipe:1",
-         "-map", "0:a:0?", "-f", "alsa", AUDIO_DEVICE],
-        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-    )
-    _video_proc = proc          # so stop/quit can kill it from the main thread
-    frames = 0
-    try:
-        while not _stopped():
-            data = proc.stdout.read(frame_bytes)
-            if not data or len(data) < frame_bytes:
-                break
-            face.display_raw565(data)
-            frames += 1
-    finally:
-        if proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=2)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-        _video_proc = None
-        globals()["_media_pending"] = False
-    _face_frame(mouth="smile")
-    name = os.path.basename(path)
-    if frames == 0:
-        return f"I couldn't decode {name} — is ffmpeg healthy?"
-    return "Video stopped." if _stopped() else f"That was {name} — I enjoyed it!"
-
-
 def play_video(query: str) -> str:
-    global _media_pending
+    """Play a video on the face screen with audio -- in a SEPARATE process
+    (video_play.py) so the assistant's input loop stays fully responsive. We
+    hand the LCD to the child (release our SPI/GPIO), track its process so
+    stop/quit can kill it, and re-init the face lazily once it's done."""
+    global _video_proc
+    if not shutil.which("ffmpeg"):
+        return "ffmpeg isn't installed, so I can't play videos."
     path = _find_video(query)
     if path is None:
         return ("I don't have that video in my library yet — ask me to "
                 "download it first.")
-    _media_pending = True       # so the spoken ack is skipped, not collided
-    return start_action(f"playing {os.path.basename(path)} on my face",
-                        lambda: video_routine(path))
+    if _video_proc is not None and _video_proc.poll() is None:
+        return "A video is already playing. Say stop first."
+    _stop_music()               # free the shared audio device
+    _release_face()             # hand the screen to the child process
+    sleep(0.25)                 # let gpiozero fully release the DC/RST pins
+    env = dict(os.environ, MELVINN_AUDIO=AUDIO_DEVICE, MELVINN_VFPS=str(VIDEO_FPS))
+    try:
+        _video_proc = subprocess.Popen(
+            [sys.executable, os.path.join(TESTS_DIR, "video_play.py"), path],
+            cwd=TESTS_DIR, env=env)
+    except OSError as exc:
+        return f"Couldn't start the video player: {exc}"
+    return (f"Playing {os.path.basename(path)} on my face — say stop to quit. "
+            "You can keep talking to me while it plays.")
 
 
 def robot_see():
