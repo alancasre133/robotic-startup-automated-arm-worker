@@ -1672,6 +1672,20 @@ TOOLS = [
         },
     },
     {
+        "name": "set_volume",
+        "description": "Change the speaker volume. Give 'percent' (0-100) for "
+                       "an absolute level, OR 'change' = 'up'/'down' for a "
+                       "louder/quieter step. Use for 'turn it up', 'quieter', "
+                       "'set volume to 50', 'too loud', etc.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "percent": {"type": "number", "description": "0-100 absolute level"},
+                "change": {"type": "string", "enum": ["up", "down"]},
+            },
+        },
+    },
+    {
         "name": "run_script",
         "description": "Run one of the robot's test scripts in the background "
                        "(the user can say 'stop' to kill it). Use when the "
@@ -1911,6 +1925,9 @@ def run_tool(name: str, tool_input: dict) -> str:
         return set_voice(tool_input["voice"])
     if name == "list_voices":
         return list_voices()
+    if name == "set_volume":
+        return set_volume(percent=tool_input.get("percent"),
+                          change=tool_input.get("change"))
     if name == "play_sound":
         return play_sound(tool_input["sound"])
     if name == "set_effect":
@@ -2117,6 +2134,10 @@ SYSTEM = (
     "sound effect over any voice with set_effect (robot, dalek, monster, "
     "ghost, underwater, telephone, cave, space, giant, chipmunk, drunk; "
     "none to clear).\n\n"
+    "YOU CAN CONTROL YOUR OWN VOLUME: set_volume(change='up'/'down') for "
+    "louder/quieter, or set_volume(percent=0-100) for an exact level. Use it "
+    "for 'turn it up', 'too loud', 'set volume to 30'. Never say you can't "
+    "change the volume — you can.\n\n"
     "TO GRAB A PLAIN-COLOURED OBJECT (red/green/blue/yellow blob): call "
     "grab(color), or grab_all(color) for all of them. Both run in the "
     "background and 'stop' interrupts. For ANY OTHER object — a bottle, a "
@@ -2389,6 +2410,54 @@ SOUND_EFFECTS = {
     "howl":  ("puppy", "awoooooo"),
     "meow":  ("chipmunk", "mee-ow, meow"),
 }
+
+
+AUDIO_CARD = AUDIO_DEVICE.split(":")[1].split(",")[0]   # "1" from plughw:1,0
+_mixer_ctrl = None
+
+
+def _find_mixer_control():
+    """Pick the speaker's playback volume control (name varies by device)."""
+    global _mixer_ctrl
+    if _mixer_ctrl is not None:
+        return _mixer_ctrl
+    try:
+        out = subprocess.run(["amixer", "-c", AUDIO_CARD, "scontrols"],
+                             capture_output=True, text=True, timeout=5).stdout
+        names = re.findall(r"'([^']+)'", out)
+    except Exception:
+        names = []
+    for pref in ("Speaker", "PCM", "Master", "Headphone", "Playback"):
+        if pref in names:
+            _mixer_ctrl = pref
+            return _mixer_ctrl
+    _mixer_ctrl = names[0] if names else ""
+    return _mixer_ctrl
+
+
+def set_volume(percent=None, change=None) -> str:
+    """Set the USB speaker volume. percent=0-100 absolute, or change='up'/
+    'down' for a relative step. amixer handles the relative math itself."""
+    if not shutil.which("amixer"):
+        return "I can't change the volume (amixer isn't installed)."
+    ctrl = _find_mixer_control()
+    if not ctrl:
+        return "I couldn't find a volume control on my speaker."
+    if change in ("up", "down"):
+        arg = "8%+" if change == "up" else "8%-"
+    elif percent is not None:
+        arg = f"{max(0, min(100, int(percent)))}%"
+    else:
+        return "Tell me a level (0-100) or say louder/quieter."
+    try:
+        out = subprocess.run(
+            ["amixer", "-c", AUDIO_CARD, "sset", ctrl, arg, "unmute"],
+            capture_output=True, text=True, timeout=5, check=True).stdout
+        m = re.search(r"\[(\d+)%\]", out)
+        now = f" (now {m.group(1)}%)" if m else ""
+        return f"Volume {'up' if change=='up' else 'down' if change=='down' else 'set'}{now}."
+    except Exception as exc:
+        return f"Couldn't change the volume: {exc}"
 
 
 def play_sound(name: str) -> str:
