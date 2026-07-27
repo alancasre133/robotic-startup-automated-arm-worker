@@ -781,6 +781,8 @@ SCRIPTS = {
     "recognize test":     ("recognize_test.py",     False, "ORB object recognition"),
     "motor test":         ("motor_test.py",         False, "exercise the wheels"),
     "camera test":        ("camera_test.py",        False, "capture a test photo"),
+    "face styles":        ("face_styles.py",        False, "cycle all LCD face designs on the screen"),
+    "face test":          ("face_test.py",          False, "colour fills then eyes on the screen"),
 }
 
 
@@ -790,7 +792,7 @@ def _release_hardware() -> None:
     gpiozero devices hold their pins exclusively — if we kept them, the child
     would die with 'GPIO busy'. Everything re-inits lazily on next use here.
     """
-    global motor_left, motor_right, _distance_sensor
+    global motor_left, motor_right, _distance_sensor, _face, _FACE_ERR
     for dev in (motor_left, motor_right, _distance_sensor):
         try:
             if dev is not None:
@@ -799,6 +801,19 @@ def _release_hardware() -> None:
             pass
     motor_left = motor_right = None
     _distance_sensor = None
+    # Release the LCD too — its DC/RST are gpiozero OutputDevices that hold
+    # pins exclusively, so a child face script (face_styles/face_test) would
+    # otherwise die with 'GPIO busy'. Re-inits lazily on the next face call.
+    if _face is not None:
+        for h in (getattr(_face, "_dc", None), getattr(_face, "_rst", None),
+                  getattr(_face, "_spi", None)):
+            try:
+                if h is not None:
+                    h.close()
+            except Exception:
+                pass
+        _face = None
+        _FACE_ERR = None
     _close_camera()
 
 
