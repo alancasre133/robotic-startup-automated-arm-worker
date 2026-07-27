@@ -1456,9 +1456,12 @@ def play_video(query: str) -> str:
     _release_face()             # hand the screen to the child process
     sleep(0.25)                 # let gpiozero fully release the DC/RST pins
     env = dict(os.environ, MELVINN_AUDIO=AUDIO_DEVICE, MELVINN_VFPS=str(VIDEO_FPS))
+    # Run the WHOLE video process (python blit loop + ffmpeg) at low priority so
+    # it can't starve the interactive SSH session / assistant at the OS level.
+    nice = ["nice", "-n", "15"] if shutil.which("nice") else []
     try:
         _video_proc = subprocess.Popen(
-            [sys.executable, os.path.join(TESTS_DIR, "video_play.py"), path],
+            [*nice, sys.executable, os.path.join(TESTS_DIR, "video_play.py"), path],
             cwd=TESTS_DIR, env=env)
     except OSError as exc:
         return f"Couldn't start the video player: {exc}"
