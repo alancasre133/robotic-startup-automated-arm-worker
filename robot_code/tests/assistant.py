@@ -126,6 +126,9 @@ if anthropic is not None and os.environ.get("ANTHROPIC_API_KEY"):
 motor_left = motor_right = None
 _music_proc = None          # currently playing mpg123 process
 _video_proc = None          # currently playing video ffmpeg process
+_media_pending = False      # media queued but its process not up yet (video's
+                            # 2.5s startup) -- treated as "playing" so the spoken
+                            # ack doesn't collide with the device it's about to grab
 
 # Jab the motors a few times before steady drive to break static friction on a
 # heavy/top-heavy bot. Needed on the L9110S, where breakaway torque was ~0.4-0.6x
@@ -930,7 +933,8 @@ def _stop_music() -> str:
 def _stop_media() -> None:
     """Kill any music AND any playing video ffmpeg — used on stop/quit so the
     audio device and screen are freed immediately and nothing is orphaned."""
-    global _video_proc
+    global _video_proc, _media_pending
+    _media_pending = False
     _stop_music()
     if _video_proc is not None and _video_proc.poll() is None:
         _video_proc.terminate()
@@ -942,7 +946,8 @@ def _stop_media() -> None:
 
 
 def _media_playing() -> bool:
-    return ((_music_proc is not None and _music_proc.poll() is None) or
+    return (_media_pending or
+            (_music_proc is not None and _music_proc.poll() is None) or
             (_video_proc is not None and _video_proc.poll() is None))
 
 
@@ -1453,6 +1458,7 @@ def video_routine(path: str) -> str:
             except subprocess.TimeoutExpired:
                 proc.kill()
         _video_proc = None
+        globals()["_media_pending"] = False
     _face_frame(mouth="smile")
     name = os.path.basename(path)
     if frames == 0:
@@ -1461,10 +1467,12 @@ def video_routine(path: str) -> str:
 
 
 def play_video(query: str) -> str:
+    global _media_pending
     path = _find_video(query)
     if path is None:
         return ("I don't have that video in my library yet — ask me to "
                 "download it first.")
+    _media_pending = True       # so the spoken ack is skipped, not collided
     return start_action(f"playing {os.path.basename(path)} on my face",
                         lambda: video_routine(path))
 
@@ -2736,7 +2744,8 @@ def _play_wav(wav: str) -> None:
             subprocess.run(["sox", wav, out] + chain.split(),
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                            check=True)
-            subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE, out])
+            # timeout so a wedged device (grabbed by media) can't hang forever
+            subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE, out], timeout=30)
             return
         except (OSError, subprocess.SubprocessError):
             pass          # effect failed -> fall through to the dry wav
@@ -2744,7 +2753,10 @@ def _play_wav(wav: str) -> None:
             if out:
                 try: os.remove(out)
                 except OSError: pass
-    subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE, wav])
+    try:
+        subprocess.run(["aplay", "-q", "-D", AUDIO_DEVICE, wav], timeout=30)
+    except subprocess.SubprocessError:
+        pass
 
 
 def _say_kokoro(text: str) -> bool:
@@ -2847,15 +2859,25 @@ def _say_espeak(text: str) -> None:
             except OSError: pass
 
 
-def speak(text: str) -> None:
+def speak(text: str, background: bool = False) -> None:
     print(f"[MELVINN] {text}")
     if not text.strip():
         return
     # Don't fight playing media for the one exclusive audio device: espeak/
     # aplay would block or error with "Device or resource busy". Show the
-    # text, skip the voice while a song or video is playing.
+    # text, skip the voice while a song or video is playing (or about to).
     if _media_playing():
         return
+    # background=True runs the TTS off the main input loop, so typing is NEVER
+    # blocked by a long spoken reply (or by audio colliding with media that
+    # starts mid-sentence). Used for the main conversational reply.
+    if background:
+        threading.Thread(target=_say, args=(text,), daemon=True).start()
+        return
+    _say(text)
+
+
+def _say(text: str) -> None:
     # Default is Piper (fast, light). sherpa-onnx neural voices are OPT-IN only
     # -- the Kokoro model needs ~900MB and swap-thrashes a 1GB Pi 3, so we never
     # load it for the default voice; only when a sherpa speaker is explicitly
@@ -3083,7 +3105,7 @@ def main() -> None:
 
             reply = think(user_text, history)
             if reply:
-                speak(reply)
+                speak(reply, background=True)   # never block the input prompt
 
     except (KeyboardInterrupt, EOFError):
         pass
