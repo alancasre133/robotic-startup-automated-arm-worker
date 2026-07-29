@@ -280,21 +280,16 @@ python3 -m pip install --break-system-packages adafruit-circuitpython-pca9685 ad
     || python3 -m pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka
 
 echo
-echo "==> Installing the Claude brain + LCD face libraries (anthropic, spidev, Pillow)..."
-# anthropic  -> the smart brain (needs ANTHROPIC_API_KEY set to activate;
-#               without it MELVINN runs the offline keyword brain).
-# spidev/Pillow -> drive + draw the ST7789 face screen (numpy comes via opencv).
-python3 -m pip install --break-system-packages anthropic spidev Pillow 2>/dev/null \
-    || python3 -m pip install anthropic spidev Pillow \
-    || FAILURES+=("anthropic/spidev/Pillow (pip)")
-
-echo
-echo "==> Enabling SPI (for the ST7789 LCD face screen)..."
-sudo raspi-config nonint do_spi 0
+echo "==> Installing the Claude brain (anthropic)..."
+# The smart brain. Needs ANTHROPIC_API_KEY set to activate; without it
+# MELVINN runs the offline keyword brain.
+python3 -m pip install --break-system-packages anthropic 2>/dev/null \
+    || python3 -m pip install anthropic \
+    || FAILURES+=("anthropic (pip)")
 
 echo
 if [ "${#FAILURES[@]}" -eq 0 ]; then
-    echo "==> Setup complete. Reboot to load the camera + I2C + SPI:  sudo reboot"
+    echo "==> Setup complete. Reboot to load the camera + I2C:  sudo reboot"
     echo "    For the smart Claude brain, set your key (else it runs offline):"
     echo "      echo 'export ANTHROPIC_API_KEY=sk-ant-...' >> ~/.bashrc && source ~/.bashrc"
 else
