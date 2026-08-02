@@ -146,7 +146,7 @@ def _ensure_motors():
     global motor_left, motor_right
     if motor_left is None:
         motor_left = Motor(forward=16, backward=20, pwm=False)
-        motor_right = Motor(forward=22, backward=27, pwm=False)
+        motor_right = Motor(forward=27, backward=22, pwm=False)
     return motor_left, motor_right
 
 
