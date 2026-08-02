@@ -1,94 +1,117 @@
-<svg viewBox="0 0 840 760" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
-  <rect x="0" y="0" width="840" height="760" rx="14" fill="#F7F6F3"/>
-  <text x="30" y="40" font-size="24" font-weight="700" fill="#1A1A1A">Robot Car — Wiring Overview</text>
-  <text x="30" y="62" font-size="13" fill="#6B7280">Raspberry Pi 3 drives two DC motors through an L9110S, a 6-DOF arm through a PCA9685 over I&#178;C, and reads an HC-SR04 for obstacles.</text>
+<svg viewBox="0 0 920 740" xmlns="http://www.w3.org/2000/svg" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif">
+  <rect x="0" y="0" width="920" height="740" rx="14" fill="#F7F6F3"/>
+  <text x="30" y="40" font-size="24" font-weight="700" fill="#1A1A1A">MELVINN — Wiring Overview</text>
+  <text x="30" y="62" font-size="13" fill="#6B7280">Raspberry Pi 3 drives a 4WD chassis (4&#215; JGA25 gearmotors on 2&#215; BTS7960), a 6-DOF arm via PCA9685 over I&#178;C, an HC-SR04, and an ST7789 LCD face.</text>
 
   <!-- Power Bank -->
-  <rect x="70" y="86" width="190" height="72" rx="10" fill="#FFFFFF" stroke="#E8843A" stroke-width="2"/>
-  <text x="165" y="116" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">Power Bank</text>
-  <text x="165" y="136" font-size="12" fill="#6B7280" text-anchor="middle">5V USB &#183; powers Pi</text>
+  <rect x="60" y="80" width="190" height="66" rx="10" fill="#FFFFFF" stroke="#E8843A" stroke-width="2"/>
+  <text x="155" y="108" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">Power Bank</text>
+  <text x="155" y="128" font-size="12" fill="#6B7280" text-anchor="middle">5V USB &#183; powers Pi</text>
 
-  <!-- AA Battery -->
-  <rect x="580" y="86" width="190" height="72" rx="10" fill="#FFFFFF" stroke="#E8843A" stroke-width="2"/>
-  <text x="675" y="116" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">4 &#215; AA Battery</text>
-  <text x="675" y="136" font-size="12" fill="#6B7280" text-anchor="middle">~6V &#183; powers motors</text>
+  <!-- NiMH drive pack -->
+  <rect x="670" y="80" width="190" height="66" rx="10" fill="#FFFFFF" stroke="#E8843A" stroke-width="2"/>
+  <text x="765" y="108" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">6V NiMH (drive)</text>
+  <text x="765" y="128" font-size="12" fill="#6B7280" text-anchor="middle">motor power &#183; 7.5A fuse</text>
 
   <!-- Raspberry Pi -->
-  <rect x="70" y="266" width="210" height="120" rx="10" fill="#FFFFFF" stroke="#3F76D0" stroke-width="2"/>
-  <text x="175" y="312" font-size="16" font-weight="700" fill="#1A1A1A" text-anchor="middle">Raspberry Pi 3</text>
-  <text x="175" y="334" font-size="12" fill="#6B7280" text-anchor="middle">Model A+ &#183; Trixie</text>
-  <text x="175" y="354" font-size="12" fill="#6B7280" text-anchor="middle">GPIO control</text>
+  <rect x="60" y="222" width="220" height="150" rx="10" fill="#FFFFFF" stroke="#3F76D0" stroke-width="2"/>
+  <text x="170" y="266" font-size="16" font-weight="700" fill="#1A1A1A" text-anchor="middle">Raspberry Pi 3</text>
+  <text x="170" y="288" font-size="12" fill="#6B7280" text-anchor="middle">Model A+ &#183; Trixie</text>
+  <text x="170" y="308" font-size="12" fill="#6B7280" text-anchor="middle">GPIO / I&#178;C / SPI control</text>
 
-  <!-- L9110S -->
-  <rect x="560" y="266" width="210" height="120" rx="10" fill="#FFFFFF" stroke="#3F76D0" stroke-width="2"/>
-  <text x="665" y="312" font-size="16" font-weight="700" fill="#1A1A1A" text-anchor="middle">L9110S Driver</text>
-  <text x="665" y="334" font-size="12" fill="#6B7280" text-anchor="middle">dual H-bridge</text>
-  <text x="665" y="354" font-size="12" fill="#6B7280" text-anchor="middle">Motor A + Motor B</text>
+  <!-- Left BTS7960 -->
+  <rect x="420" y="206" width="200" height="78" rx="10" fill="#FFFFFF" stroke="#3F76D0" stroke-width="2"/>
+  <text x="520" y="234" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">BTS7960 &#183; LEFT</text>
+  <text x="520" y="253" font-size="12" fill="#6B7280" text-anchor="middle">43A H-bridge</text>
+  <text x="520" y="270" font-size="11" fill="#6B7280" text-anchor="middle">RPWM 16 &#183; LPWM 20</text>
 
-  <!-- Motor A -->
-  <rect x="500" y="486" width="120" height="78" rx="10" fill="#FFFFFF" stroke="#2E9E5B" stroke-width="2"/>
-  <text x="560" y="520" font-size="14" font-weight="700" fill="#1A1A1A" text-anchor="middle">Motor A</text>
-  <text x="560" y="540" font-size="12" fill="#6B7280" text-anchor="middle">left wheel</text>
+  <!-- Right BTS7960 -->
+  <rect x="420" y="322" width="200" height="78" rx="10" fill="#FFFFFF" stroke="#3F76D0" stroke-width="2"/>
+  <text x="520" y="350" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">BTS7960 &#183; RIGHT</text>
+  <text x="520" y="369" font-size="12" fill="#6B7280" text-anchor="middle">43A H-bridge</text>
+  <text x="520" y="386" font-size="11" fill="#6B7280" text-anchor="middle">RPWM 27 &#183; LPWM 22</text>
 
-  <!-- Motor B -->
-  <rect x="700" y="486" width="120" height="78" rx="10" fill="#FFFFFF" stroke="#2E9E5B" stroke-width="2"/>
-  <text x="760" y="520" font-size="14" font-weight="700" fill="#1A1A1A" text-anchor="middle">Motor B</text>
-  <text x="760" y="540" font-size="12" fill="#6B7280" text-anchor="middle">right wheel</text>
+  <!-- Left motors -->
+  <rect x="700" y="206" width="180" height="78" rx="10" fill="#FFFFFF" stroke="#2E9E5B" stroke-width="2"/>
+  <text x="790" y="234" font-size="14" font-weight="700" fill="#1A1A1A" text-anchor="middle">Left wheels &#215;2</text>
+  <text x="790" y="253" font-size="12" fill="#6B7280" text-anchor="middle">JGA25-370 6V</text>
+  <text x="790" y="270" font-size="11" fill="#6B7280" text-anchor="middle">paralleled on M+/M&#8722;</text>
+
+  <!-- Right motors -->
+  <rect x="700" y="322" width="180" height="78" rx="10" fill="#FFFFFF" stroke="#2E9E5B" stroke-width="2"/>
+  <text x="790" y="350" font-size="14" font-weight="700" fill="#1A1A1A" text-anchor="middle">Right wheels &#215;2</text>
+  <text x="790" y="369" font-size="12" fill="#6B7280" text-anchor="middle">JGA25-370 6V</text>
+  <text x="790" y="386" font-size="11" fill="#6B7280" text-anchor="middle">paralleled on M+/M&#8722;</text>
+
+  <!-- Servo NiMH -->
+  <rect x="60" y="470" width="150" height="76" rx="10" fill="#FFFFFF" stroke="#E8843A" stroke-width="2"/>
+  <text x="135" y="500" font-size="14" font-weight="700" fill="#1A1A1A" text-anchor="middle">6V NiMH</text>
+  <text x="135" y="520" font-size="12" fill="#6B7280" text-anchor="middle">servo power (V+)</text>
 
   <!-- PCA9685 + Arm -->
-  <rect x="70" y="486" width="210" height="78" rx="10" fill="#FFFFFF" stroke="#3F76D0" stroke-width="2"/>
-  <text x="175" y="514" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">PCA9685 + 6-DOF Arm</text>
-  <text x="175" y="534" font-size="12" fill="#6B7280" text-anchor="middle">6&#215; MG996R servos, ch. 0&#8211;5</text>
-  <text x="175" y="551" font-size="11" fill="#6B7280" text-anchor="middle">base&#8594;shoulder&#8594;elbow&#8594;wrist&#8594;wrist_rotate&#8594;gripper</text>
-
-  <!-- Servo Battery -->
-  <rect x="325" y="486" width="150" height="78" rx="10" fill="#FFFFFF" stroke="#E8843A" stroke-width="2"/>
-  <text x="400" y="516" font-size="14" font-weight="700" fill="#1A1A1A" text-anchor="middle">6V NiMH Pack</text>
-  <text x="400" y="536" font-size="12" fill="#6B7280" text-anchor="middle">servo power (V+)</text>
+  <rect x="250" y="470" width="300" height="76" rx="10" fill="#FFFFFF" stroke="#3F76D0" stroke-width="2"/>
+  <text x="400" y="498" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">PCA9685 + 6-DOF Arm</text>
+  <text x="400" y="518" font-size="12" fill="#6B7280" text-anchor="middle">6&#215; MG996R servos, ch. 0&#8211;5</text>
+  <text x="400" y="535" font-size="11" fill="#6B7280" text-anchor="middle">base&#8594;shoulder&#8594;elbow&#8594;wrist&#8594;wrist_rotate&#8594;gripper</text>
 
   <!-- HC-SR04 -->
-  <rect x="70" y="606" width="210" height="78" rx="10" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2"/>
-  <text x="175" y="634" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">HC-SR04</text>
-  <text x="175" y="654" font-size="12" fill="#6B7280" text-anchor="middle">ultrasonic distance sensor</text>
-  <text x="175" y="671" font-size="11" fill="#6B7280" text-anchor="middle">obstacle_avoid.py &#183; via divider</text>
+  <rect x="60" y="624" width="290" height="76" rx="10" fill="#FFFFFF" stroke="#7C3AED" stroke-width="2"/>
+  <text x="205" y="652" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">HC-SR04</text>
+  <text x="205" y="672" font-size="12" fill="#6B7280" text-anchor="middle">ultrasonic distance sensor</text>
+  <text x="205" y="689" font-size="11" fill="#6B7280" text-anchor="middle">Trig 13 &#183; Echo 19 (via 1k&#937;/2k&#937; divider)</text>
+
+  <!-- ST7789 LCD face -->
+  <rect x="390" y="624" width="290" height="76" rx="10" fill="#FFFFFF" stroke="#0EA5A5" stroke-width="2"/>
+  <text x="535" y="652" font-size="15" font-weight="700" fill="#1A1A1A" text-anchor="middle">ST7789 LCD face</text>
+  <text x="535" y="672" font-size="12" fill="#6B7280" text-anchor="middle">2.0" IPS &#183; MELVINN's eyes</text>
+  <text x="535" y="689" font-size="11" fill="#6B7280" text-anchor="middle">SPI0: SCL 23 SDA 19 DC 18 RST 22 CS 24</text>
 
   <!-- Power bank -> Pi -->
-  <line x1="165" y1="158" x2="165" y2="266" stroke="#E8843A" stroke-width="2.5"/>
-  <text x="175" y="216" font-size="12" font-weight="600" fill="#E8843A">USB 5V</text>
+  <line x1="155" y1="146" x2="155" y2="222" stroke="#E8843A" stroke-width="2.5"/>
+  <text x="164" y="190" font-size="12" font-weight="600" fill="#E8843A">USB 5V</text>
 
-  <!-- AA -> L9110S -->
-  <line x1="675" y1="158" x2="675" y2="266" stroke="#E8843A" stroke-width="2.5"/>
-  <text x="685" y="204" font-size="12" font-weight="600" fill="#E8843A">+6V &#8594; VCC</text>
-  <text x="685" y="221" font-size="12" font-weight="600" fill="#E8843A">&#8722; &#8594; GND</text>
+  <!-- NiMH drive -> both BTS7960 (B+/B- shared) -->
+  <path d="M 765 146 L 765 178 L 520 178 L 520 206" stroke="#E8843A" stroke-width="2.5" fill="none"/>
+  <text x="530" y="170" font-size="11" font-weight="600" fill="#E8843A">+6V &#8594; B+ (7.5A fuse) &#183; &#8722; &#8594; B&#8722;</text>
+  <line x1="520" y1="284" x2="520" y2="322" stroke="#E8843A" stroke-width="2.5" stroke-dasharray="4 3"/>
+  <text x="528" y="308" font-size="10" font-weight="600" fill="#E8843A">B+/B&#8722; shared</text>
 
-  <!-- Pi -> L9110S (signals) -->
-  <line x1="280" y1="312" x2="560" y2="312" stroke="#3F76D0" stroke-width="2.5"/>
-  <text x="420" y="300" font-size="12" font-weight="600" fill="#3F76D0" text-anchor="middle">4 GPIO signals + GND</text>
-  <text x="420" y="332" font-size="11" fill="#6B7280" text-anchor="middle">GPIO 16,20 &#8594; A &#183; 27,22 &#8594; B</text>
+  <!-- Pi -> Left BTS7960 -->
+  <path d="M 280 260 L 350 260 L 350 245 L 420 245" stroke="#3F76D0" stroke-width="2.5" fill="none"/>
+  <text x="356" y="235" font-size="11" font-weight="600" fill="#3F76D0">GPIO 16,20</text>
 
-  <!-- L9110S -> Motors -->
-  <line x1="610" y1="386" x2="560" y2="486" stroke="#2E9E5B" stroke-width="2.5"/>
-  <line x1="720" y1="386" x2="760" y2="486" stroke="#2E9E5B" stroke-width="2.5"/>
-  <text x="648" y="442" font-size="11" font-weight="600" fill="#2E9E5B">motor +/&#8722;</text>
+  <!-- Pi -> Right BTS7960 -->
+  <path d="M 280 330 L 350 330 L 350 361 L 420 361" stroke="#3F76D0" stroke-width="2.5" fill="none"/>
+  <text x="356" y="352" font-size="11" font-weight="600" fill="#3F76D0">GPIO 27,22</text>
+  <text x="150" y="352" font-size="11" fill="#6B7280">R_EN+L_EN+VCC &#8594; 3.3V (both boards)</text>
+
+  <!-- BTS7960 -> motors -->
+  <line x1="620" y1="245" x2="700" y2="245" stroke="#2E9E5B" stroke-width="2.5"/>
+  <line x1="620" y1="361" x2="700" y2="361" stroke="#2E9E5B" stroke-width="2.5"/>
+  <text x="628" y="236" font-size="10" font-weight="600" fill="#2E9E5B">M+/M&#8722;</text>
+  <text x="628" y="380" font-size="10" font-weight="600" fill="#2E9E5B">M+/M&#8722;</text>
 
   <!-- Pi -> PCA9685 (I2C) -->
-  <line x1="175" y1="386" x2="175" y2="486" stroke="#3F76D0" stroke-width="2.5"/>
-  <text x="185" y="440" font-size="11" font-weight="600" fill="#3F76D0">I&#178;C: SDA/SCL + 3.3V + GND</text>
+  <path d="M 200 372 L 200 430 L 340 430 L 340 470" stroke="#3F76D0" stroke-width="2.5" fill="none"/>
+  <text x="208" y="452" font-size="11" font-weight="600" fill="#3F76D0">I&#178;C SDA/SCL + 3.3V + GND</text>
 
-  <!-- Battery -> PCA9685 -->
-  <line x1="325" y1="525" x2="280" y2="525" stroke="#E8843A" stroke-width="2.5"/>
-  <text x="288" y="515" font-size="11" font-weight="600" fill="#E8843A">V+</text>
+  <!-- Servo NiMH -> PCA9685 -->
+  <line x1="210" y1="508" x2="250" y2="508" stroke="#E8843A" stroke-width="2.5"/>
+  <text x="216" y="500" font-size="11" font-weight="600" fill="#E8843A">V+</text>
 
-  <!-- Pi -> HC-SR04 (Trig/Echo, routed around the arm box) -->
-  <path d="M 280 300 L 300 300 L 300 641 L 280 641" stroke="#7C3AED" stroke-width="2.5" fill="none"/>
-  <text x="308" y="475" font-size="11" font-weight="600" fill="#7C3AED">Trig (GPIO13)</text>
-  <text x="308" y="491" font-size="11" font-weight="600" fill="#7C3AED">Echo (GPIO19,</text>
-  <text x="308" y="507" font-size="11" font-weight="600" fill="#7C3AED">via 1k&#937;/2k&#937; divider)</text>
+  <!-- Pi -> HC-SR04 -->
+  <path d="M 110 372 L 110 662 L 60 662" stroke="#7C3AED" stroke-width="2.5" fill="none"/>
+  <text x="118" y="600" font-size="11" font-weight="600" fill="#7C3AED">Trig/Echo</text>
+
+  <!-- Pi -> ST7789 LCD -->
+  <path d="M 245 372 L 245 588 L 535 588 L 535 624" stroke="#0EA5A5" stroke-width="2.5" fill="none"/>
+  <text x="360" y="580" font-size="11" font-weight="600" fill="#0EA5A5">SPI: SCL/SDA/DC/RST/CS + 3.3V</text>
 
   <!-- Legend -->
-  <text x="30" y="717" font-size="11" fill="#6B7280">Legend:</text>
-  <rect x="84" y="709" width="14" height="10" fill="#E8843A"/><text x="104" y="718" font-size="11" fill="#6B7280">power</text>
-  <rect x="152" y="709" width="14" height="10" fill="#3F76D0"/><text x="172" y="718" font-size="11" fill="#6B7280">signal/GND/I&#178;C</text>
-  <rect x="270" y="709" width="14" height="10" fill="#2E9E5B"/><text x="290" y="718" font-size="11" fill="#6B7280">motor</text>
-  <rect x="338" y="709" width="14" height="10" fill="#7C3AED"/><text x="358" y="718" font-size="11" fill="#6B7280">sensor</text>
+  <text x="30" y="726" font-size="11" fill="#6B7280">Legend:</text>
+  <rect x="84" y="718" width="14" height="10" fill="#E8843A"/><text x="104" y="727" font-size="11" fill="#6B7280">power</text>
+  <rect x="152" y="718" width="14" height="10" fill="#3F76D0"/><text x="172" y="727" font-size="11" fill="#6B7280">signal / I&#178;C</text>
+  <rect x="252" y="718" width="14" height="10" fill="#2E9E5B"/><text x="272" y="727" font-size="11" fill="#6B7280">motor</text>
+  <rect x="320" y="718" width="14" height="10" fill="#7C3AED"/><text x="340" y="727" font-size="11" fill="#6B7280">sensor</text>
+  <rect x="392" y="718" width="14" height="10" fill="#0EA5A5"/><text x="412" y="727" font-size="11" fill="#6B7280">display (SPI)</text>
 </svg>
