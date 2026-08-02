@@ -8,7 +8,7 @@ A Raspberry Pi 3 based robotic arm project.
 
 ## What works today
 
-- ✅ **Drive** — 4WD chassis, 4× TT motors on **2× BTS7960** (one board per side, that side's pair paralleled) — drives with real forward/back/turn/spin; metal-gear motor upgrade in progress
+- ✅ **Drive** — 4WD chassis, 4× **JGA25-370 6V metal gearmotors** on **2× BTS7960** (one board per side, that side's pair paralleled) — drives straight with real forward/back/turn/spin and enough torque to move under the arm's weight
 - ✅ **Camera** — IMX219: stills + a **live browser stream** (no screen on the Pi)
 - ✅ **Remote access** — watch the camera **from anywhere over the internet** via Tailscale
 - 🧪 **Vision** — on-device **face detection + motor tracking** (experimental)
@@ -339,13 +339,15 @@ onto it. Replaced the single L9110S (which overheated at ~3× its channel
 rating). Reuses the freed-up L9110S GPIO as direction inputs; `gpiozero`'s
 `Motor(forward, backward)` drives RPWM/LPWM directly.
 
-> **Motor upgrade in progress (Jul 2026):** the original TT motors are being
-> replaced with 4× **JGA25-370 6V 60 RPM** metal gearmotors (~10× the torque —
-> the TTs were torque-marginal at this chassis weight even on the BTS7960s).
-> Nothing electrical changes: same GPIO pins, same M+/M− buses, same fuse.
-> Mechanically each new motor uses a 25 mm clamp bracket, a 4 mm-bore brass
-> hex cople, and a 65 mm hex-socket wheel. Expect ~0.2 m/s cruise (60 RPM ×
-> 65 mm wheel) with instant starts — ROCK_START stays off.
+> **Motor upgrade — DONE (Jul 2026):** the original TT motors were replaced
+> with 4× **JGA25-370 6V 60 RPM** metal gearmotors (~10× the torque — the TTs
+> were torque-marginal at this chassis weight even on the BTS7960s). Nothing
+> electrical changed: same GPIO pins, same M+/M− buses, same fuse. Each motor
+> uses a 25 mm clamp bracket, a 4 mm-bore brass hex cople, and a 65 mm
+> hex-socket wheel. ~0.2 m/s cruise (60 RPM × 65 mm wheel), instant starts —
+> ROCK_START stays off. ⚠️ These pull more current than the TTs; a sagging
+> battery makes the drive crawl/veer — charge the NiMH first when debugging
+> weak drive, and if the 7.5 A fuse pops on carpet starts, move to 10 A.
 
 | BTS7960 pin | Pi pin | GPIO / to |
 |-------------|--------|-----------|

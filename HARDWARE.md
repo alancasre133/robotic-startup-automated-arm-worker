@@ -32,9 +32,11 @@ the board's silkscreen GPIO# labels).
 | 6 | 6V NiMH battery pack (2200 mAh) | 1 | Drive-motor power to the BTS7960 B+/B− (the **same kind** of pack as the servo supply). Fused at 7.5A in the B+ line | ~280 |
 | 7 | Dupont jumper wires (M–F & F–F, 40+) + thick wire for B+/B− | 1 set | Pi GPIO ↔ drivers, battery joins | 80–120 |
 
-> The chassis kit (#4) bundles the motors and wheels. The motors are still the
-> original **TT gearmotors**; a swap to metal-gear **JGA25-370 6V** motors is
-> ordered (10× the torque) — see the Drive upgrade note in the README.
+> The chassis kit (#4) came with TT gearmotors, but the drive now runs **4×
+> JGA25-370 6V 60 RPM metal gearmotors** (~10× the torque) — installed on 25 mm
+> clamp brackets with 4 mm-bore brass hex coples into 65 mm hex wheels. See the
+> Drive upgrade note in the README. They draw more current than the TTs, so a
+> weak battery is the first thing to check if the drive is sluggish.
 >
 > ✅ **4WD drive is 2× BTS7960 now.** Each board drives one side's two
 > paralleled TT motors from a 6V NiMH pack (43A rating — no overcurrent
