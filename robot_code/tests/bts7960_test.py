@@ -27,8 +27,8 @@ from gpiozero import Motor
 from time import sleep
 
 # Left BTS7960: RPWM=16, LPWM=20.  Right BTS7960: RPWM=27, LPWM=22.
-left  = Motor(forward=20, backward=16, pwm=False)
-right = Motor(forward=27, backward=22, pwm=False)
+left  = Motor(forward=16, backward=20, pwm=False)
+right = Motor(forward=22, backward=27, pwm=False)
 
 PAUSE = 1.5   # seconds per move
 
