@@ -17,7 +17,7 @@ from time import sleep
 
 from gpiozero import Motor
 
-left  = Motor(forward=16, backward=20, pwm=False)
+left  = Motor(forward=20, backward=16, pwm=False)
 right = Motor(forward=27, backward=22, pwm=False)
 
 ROCK_START = True   # jab before steady drive to jolt the bot off a standstill
