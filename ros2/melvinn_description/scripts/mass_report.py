@@ -7,7 +7,7 @@ Weight and centre-of-gravity report for MELVINN, computed from the URDF.
 
 Walks the link tree, does forward kinematics at a given arm pose, and sums
 mass * position to get the centre of gravity. Then compares the torque the
-drivetrain needs against what TT gearmotors actually produce.
+drivetrain needs against what the JGA25 gearmotors actually produce.
 
 WHAT THIS CAN AND CANNOT TELL YOU
     It answers "how heavy is it, where is the weight, and is there torque
@@ -26,11 +26,12 @@ import xml.etree.ElementTree as ET
 
 G = 9.81
 
-# TT gearmotor, the yellow-wheel kind. Stall torque is quoted anywhere from
-# 0.8 to 1.2 kg-cm at 6V depending on the gear ratio (1:48 vs 1:120) and who
-# is selling it. Both ends are shown in the report.
-TT_STALL_TORQUE_LOW = 0.8 * 0.0980665 / 10   # kg-cm -> N-m  = 0.0078
-TT_STALL_TORQUE_HIGH = 1.2 * 0.0980665 / 10  # = 0.0118
+# JGA25-370 6V 60RPM metal gearmotor (installed Jul 2026, replaced the TT
+# motors). Datasheet stall torque is ~2-5 kg-cm at 6V depending on the exact
+# winding; both ends are shown in the report. (For reference the old TT motors
+# were 0.8-1.2 kg-cm -- ~4x less, which is why the robot couldn't move.)
+MOTOR_STALL_TORQUE_LOW = 2.0 * 0.0980665 / 10   # kg-cm -> N-m  = 0.0196
+MOTOR_STALL_TORQUE_HIGH = 5.0 * 0.0980665 / 10  # = 0.0490
 
 # Rolling resistance coefficients. Hard rubber on smooth hardwood is low;
 # BREAKAWAY (static, getting it moving from rest) is several times higher,
@@ -183,16 +184,17 @@ def main():
         print(f"{label}  (Crr = {crr})")
         print(f"  force needed:             {force:.2f} N")
         print(f"  torque needed per wheel:  {torque_per_wheel*1000:.1f} mN-m")
-        for spec, tq in (("low-spec TT", TT_STALL_TORQUE_LOW),
-                         ("high-spec TT", TT_STALL_TORQUE_HIGH)):
+        for spec, tq in (("low-spec JGA25", MOTOR_STALL_TORQUE_LOW),
+                         ("high-spec JGA25", MOTOR_STALL_TORQUE_HIGH)):
             margin = tq / torque_per_wheel if torque_per_wheel else float("inf")
             verdict = "OK" if margin >= 1.0 else "NOT ENOUGH"
             print(f"    {spec:<13} {tq*1000:5.1f} mN-m  ->  margin x{margin:.1f}  {verdict}")
 
     print()
     print("NOTE: those motor figures are STALL torque at a full 6 V. Two motors")
-    print("share each L9110S channel and the pack sags under load, so the real")
-    print("delivered torque is a fraction of the numbers above.")
+    print("share each BTS7960 board and the NiMH sags under load, so delivered")
+    print("torque is somewhat below the numbers above -- but with the JGA25s the")
+    print("margin is large enough that the robot drives under the arm's weight.")
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
   Models the real robot as built: a 4WD acrylic chassis carrying a 6-DOF
   MG996R arm on a PCA9685, an HC-SR04 facing forward, the IMX219 camera on
   the wrist, and all the electronics that actually ride along (Pi, two
-  battery packs, power bank, speakerphone, USB hub, motor driver).
+  battery packs, power bank, speakerphone, USB hub, two BTS7960 motor drivers).
 
   JOINT NAMES MATCH THE FIRMWARE. The six arm joints are named exactly as in
   ARM_JOINTS in robot_code/tests/assistant.py (base, shoulder, elbow, wrist,
@@ -57,16 +57,18 @@
        Where these come from:
          MG996R servo            0.055 each (datasheet)
          Raspberry Pi 3A+        0.029      (spec)
-         TT gearmotor            0.030 each (typical) — carried on the wheel
-                                            link, since it sits at the wheel
+         JGA25-370 gearmotor     0.100 each (metal-gear, installed Jul 2026) —
+                                            carried on the wheel link, since it
+                                            sits at the wheel
          Redmi 20000mAh bank     0.350      (typical for 20Ah)
          Blomiky 6V 2200mAh NiMH 0.200      (typical 5-cell sub-C pack)
          4x AA + holder          0.120
          USB speakerphone        0.200
          acrylic 4WD chassis     0.250      (both plates + standoffs)
+         BTS7960 (IBT-2) driver  0.033 each (2 boards)
   -->
   <xacro:property name="chassis_mass"  value="0.250"/>
-  <xacro:property name="wheel_mass"    value="0.065"/>  <!-- wheel + its TT motor -->
+  <xacro:property name="wheel_mass"    value="0.135"/>  <!-- 65mm wheel + its JGA25 gearmotor -->
 
   <xacro:property name="m_arm_base"    value="0.075"/>
   <xacro:property name="m_shoulder"    value="0.075"/>
@@ -81,7 +83,7 @@
   <xacro:property name="m_drive_batt"  value="0.120"/>
   <xacro:property name="m_servo_batt"  value="0.200"/>
   <xacro:property name="m_pca9685"     value="0.010"/>
-  <xacro:property name="m_l9110s"      value="0.005"/>
+  <xacro:property name="m_drivers"     value="0.066"/>  <!-- 2x BTS7960 (IBT-2) -->
   <xacro:property name="m_speaker"     value="0.200"/>
   <xacro:property name="m_usb_hub"     value="0.040"/>
   <xacro:property name="m_ultrasonic"  value="0.010"/>
@@ -155,8 +157,8 @@
                  x="0.065" y="0.030" z="0.012"
                  px="-0.050" py="0.040" pz="${deck + 0.008}" colour="green"/>
 
-  <xacro:payload name="l9110s" parent="base_link" mass="${m_l9110s}"
-                 x="0.030" y="0.022" z="0.008"
+  <xacro:payload name="drivers" parent="base_link" mass="${m_drivers}"
+                 x="0.050" y="0.050" z="0.010"
                  px="-0.070" py="-0.045" pz="${deck + 0.006}" colour="blue"/>
 
   <xacro:payload name="pca9685" parent="base_link" mass="${m_pca9685}"

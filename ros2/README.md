@@ -98,41 +98,44 @@ Verified numerically: 0.2 m/s for ~3 s moved him 0.64 m along x, and 0.5 rad/s
 for ~2 s turned him 54°.
 
 **This is kinematics, not physics.** There's no mass, friction, or motor
-torque, so the real robot's whole difficulty — a heavy arm on current-starved
-TT motors that need rock-starting to break loose — doesn't exist here. Ask the
-sim for 0.2 m/s and you get exactly 0.2 m/s. What it *does* exercise is the
+torque, so the real robot's difficulty — a heavy arm and the rolling/breakaway
+resistance the drivetrain has to overcome — doesn't exist here. Ask the sim for
+0.2 m/s and you get exactly 0.2 m/s. What it *does* exercise is the
 interface (`/cmd_vel` in, tf + joint states out), which is precisely what Nav2
 and a real-robot bridge speak. Real physics would mean Gazebo, which needs
 inertia and collision on every link plus a diff-drive plugin.
 
-## Why he barely moves — what the model says
+## Drivetrain margin — what the model says (and why the motors were upgraded)
 
 ```bash
 ros2 run melvinn_description mass_report.py
 ```
 
 The URDF carries real masses for every component, so it can be asked how heavy
-MELVINN is and whether the drivetrain has any margin. The answer:
+MELVINN is and whether the drivetrain has any margin. This model is what
+**diagnosed the original problem and justified the JGA25 motor swap.**
+
+With the old **TT motors** the numbers said he couldn't start from rest:
 
 ```
-TOTAL                       2.01 kg
-Centre of gravity      x +0.003   z +0.115 m
-
+TOTAL (with TT motors)      ~2.01 kg
 rolling      (Crr 0.03)   needs  4.8 mN-m/wheel   TT gives 7.8-11.8  -> x1.6-2.4  OK
 BREAKAWAY    (Crr 0.12)   needs 19.3 mN-m/wheel   TT gives 7.8-11.8  -> x0.4-0.6  NOT ENOUGH
 ```
 
-**That is exactly the observed behaviour.** Rolling has margin, breakaway
-doesn't — so once moving he keeps moving, but he cannot start from rest. It
-predicts the jabbing that `ROCK_START` does (brief pulses momentarily beat
-static friction), why `rock_test.py` needed several attempts, and why the
-verdict was "it moves, but slowly". The model was built from part specs, not
-fitted to the symptom, and it lands on the same failure mode.
+Rolling had margin, breakaway didn't — so once moving he kept moving but
+couldn't start, which is *exactly* the observed behaviour (why `ROCK_START`
+jabbing was needed, why the verdict was "moves, but slowly"). The model was
+built from part specs, not fitted to the symptom, and landed on the real
+failure mode.
 
-And those motor figures are *optimistic*: they assume stall torque at a full
-6 V with all four wheels pulling. In reality two motors share each L9110S
-channel and the alkaline pack sags under load, so delivered torque is a
-fraction of that.
+**The fix was the motors, and the model shows why it worked.** The installed
+**JGA25-370 gearmotors** deliver roughly **20-49 mN-m/wheel** — several times
+the TT's 8-12 — which clears the ~19 mN-m breakaway threshold with margin to
+spare, even though the metal motors also make MELVINN heavier (`wheel_mass`
+went 0.065 → 0.135 kg). Re-run `mass_report.py` for the current figures: the
+BREAKAWAY row now reads OK, matching the robot that drives straight under the
+arm's weight.
 
 **The surprise: it isn't mainly the arm.** The whole 6-DOF arm is 525 g, 26% of
 the robot. The single heaviest item is the **power bank at 350 g** — 17% on its
