@@ -273,11 +273,17 @@ echo
 echo "==> Enabling I2C (for the arm's PCA9685 servo driver)..."
 sudo raspi-config nonint do_i2c 0
 apt_install i2c-tools python3-smbus
+# NOTE: this Pi's HARDWARE I2C (bus 1, GPIO2/3) was damaged (~6 V hit SCL). The
+# PCA9685 now runs on a SOFTWARE i2c-gpio bus (3) on GPIO4/GPIO23. Add this line
+# to /boot/firmware/config.txt and reboot, then check `i2cdetect -y 3` for 0x40:
+#   dtoverlay=i2c-gpio,bus=3,i2c_gpio_sda=4,i2c_gpio_scl=23
+# (On a healthy/replacement Pi, skip the overlay and run MELVINN with
+#  MELVINN_I2C_BUS=1 to use the hardware bus instead.)
 
 echo
 echo "==> Installing arm libraries (PCA9685 + servo control)..."
-python3 -m pip install --break-system-packages adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka 2>/dev/null \
-    || python3 -m pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka
+python3 -m pip install --break-system-packages adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka adafruit-circuitpython-extended-bus 2>/dev/null \
+    || python3 -m pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka adafruit-circuitpython-extended-bus
 
 echo
 echo "==> Installing the Claude brain (anthropic)..."
@@ -304,7 +310,7 @@ echo
 echo "After reboot:"
 echo "  - Verify the camera:  rpicam-hello --list-cameras   (should list imx219)"
 echo "  - Test the motors:    python3 robot_code/tests/bts7960_test.py   (wheels off the ground)"
-echo "  - Verify the arm:     i2cdetect -y 1   (should show address 40)"
+echo "  - Verify the arm:     i2cdetect -y 3   (software bus; should show 40)"
 echo "  - Test the arm:       python3 robot_code/tests/arm_test.py   (arm free to move)"
 echo "  - Run the assistant:  python3 robot_code/tests/assistant.py    (voice mode)"
 echo "  - Keyboard mode:      python3 robot_code/tests/assistant.py --type"

@@ -225,6 +225,29 @@ except ImportError:
 _pca = None
 _arm_servos = {}
 
+# The Pi's HARDWARE I2C (bus 1, GPIO2/3) was damaged when the PCA9685 servo
+# power (V+, ~6 V) got accidentally wired to SCL (GPIO3). The board now lives on
+# a bit-banged SOFTWARE I2C bus from an i2c-gpio overlay on GPIO4 (SDA) / GPIO23
+# (SCL). Default to that bus (3); override with the MELVINN_I2C_BUS env var (set
+# it to 1 to go back to the hardware bus if the Pi is ever repaired/replaced).
+#   Add to /boot/firmware/config.txt, then reboot:
+#     dtoverlay=i2c-gpio,bus=3,i2c_gpio_sda=4,i2c_gpio_scl=23
+#   Verify:  i2cdetect -y 3   ->  0x40 (and 0x70 all-call)
+ARM_I2C_BUS = int(os.environ.get("MELVINN_I2C_BUS", "3"))
+
+
+def _open_arm_i2c():
+    """Open the I2C bus the PCA9685 sits on. ExtendedI2C(N) opens /dev/i2c-N, so
+    we can target the software i2c-gpio bus (3) instead of the Pi's damaged
+    hardware bus (1). Falls back to the hardware bus via Blinka only if the
+    adafruit-extended-bus lib isn't installed (in which case, on this Pi, the
+    arm stays down until you `pip install adafruit-circuitpython-extended-bus`)."""
+    try:
+        from adafruit_extended_bus import ExtendedI2C
+        return ExtendedI2C(ARM_I2C_BUS)
+    except ImportError:
+        return busio.I2C(board.SCL, board.SDA)
+
 
 def _ensure_arm():
     """Connect to the PCA9685 on first arm command (mirrors _ensure_motors)."""
@@ -232,7 +255,7 @@ def _ensure_arm():
     if _pca is not None or not _ARM_LIBS_AVAILABLE:
         return _pca
     try:
-        i2c = busio.I2C(board.SCL, board.SDA)
+        i2c = _open_arm_i2c()
         pca = PCA9685(i2c)
         pca.frequency = 50
         for i, joint in enumerate(ARM_JOINTS):

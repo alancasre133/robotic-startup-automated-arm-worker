@@ -114,7 +114,16 @@ try:
     from adafruit_pca9685 import PCA9685
     from adafruit_motor import servo as servo_lib
 
-    _pca = PCA9685(busio.I2C(board.SCL, board.SDA))
+    # PCA9685 is on the software i2c-gpio bus 3 (GPIO4 SDA / GPIO23 SCL); the
+    # Pi's hardware I2C (bus 1, GPIO2/3) was damaged. Override w/ MELVINN_I2C_BUS.
+    import os
+    _bus = int(os.environ.get("MELVINN_I2C_BUS", "3"))
+    try:
+        from adafruit_extended_bus import ExtendedI2C
+        _i2c = ExtendedI2C(_bus)
+    except ImportError:
+        _i2c = busio.I2C(board.SCL, board.SDA)
+    _pca = PCA9685(_i2c)
     _pca.frequency = 50
     ARM = {j: servo_lib.Servo(_pca.channels[i], min_pulse=500, max_pulse=2500)
            for i, j in enumerate(ARM_JOINTS)}
