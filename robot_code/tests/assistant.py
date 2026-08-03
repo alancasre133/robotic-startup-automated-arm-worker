@@ -241,7 +241,7 @@ def _open_arm_i2c():
     we can target the software i2c-gpio bus (3) instead of the Pi's damaged
     hardware bus (1). Falls back to the hardware bus via Blinka only if the
     adafruit-extended-bus lib isn't installed (in which case, on this Pi, the
-    arm stays down until you `pip install adafruit-circuitpython-extended-bus`)."""
+    arm stays down until you `pip install adafruit-extended-bus`)."""
     try:
         from adafruit_extended_bus import ExtendedI2C
         return ExtendedI2C(ARM_I2C_BUS)

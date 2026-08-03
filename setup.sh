@@ -282,8 +282,8 @@ apt_install i2c-tools python3-smbus
 
 echo
 echo "==> Installing arm libraries (PCA9685 + servo control)..."
-python3 -m pip install --break-system-packages adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka adafruit-circuitpython-extended-bus 2>/dev/null \
-    || python3 -m pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka adafruit-circuitpython-extended-bus
+python3 -m pip install --break-system-packages adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka adafruit-extended-bus 2>/dev/null \
+    || python3 -m pip install adafruit-circuitpython-pca9685 adafruit-circuitpython-motor adafruit-blinka adafruit-extended-bus
 
 echo
 echo "==> Installing the Claude brain (anthropic)..."
