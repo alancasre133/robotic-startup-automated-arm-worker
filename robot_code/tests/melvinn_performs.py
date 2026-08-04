@@ -106,18 +106,18 @@ def _music_alive():
 # shoulder pumps — never from dropping the arm down onto the chassis.
 # (shoulder centre 180 = straight up; smaller = tilted forward/down.)
 # ---------------------------------------------------------------------------
-MIN_SHOULDER = 168      # shoulder never goes below this (180 = straight up).
+MIN_SHOULDER = 174      # shoulder never goes below this (180 = straight up).
                         # Raise it further toward 180 if the arm still grazes
                         # the camera/case; lower cautiously only to reach forward.
 
 POSES = {
     #             base  shoulder elbow  wrist  wrist_rotate
-    "up":    dict(base=90,  shoulder=178, elbow=52, wrist=120, wrist_rotate=90),
-    "tall":  dict(base=90,  shoulder=174, elbow=66, wrist=138, wrist_rotate=90),
-    "left":  dict(base=45,  shoulder=171, elbow=66, wrist=112, wrist_rotate=55),
-    "right": dict(base=135, shoulder=171, elbow=66, wrist=112, wrist_rotate=125),
-    "outL":  dict(base=55,  shoulder=169, elbow=72, wrist=116, wrist_rotate=70),
-    "outR":  dict(base=125, shoulder=169, elbow=72, wrist=116, wrist_rotate=110),
+    "up":    dict(base=90,  shoulder=179, elbow=50, wrist=118, wrist_rotate=90),
+    "tall":  dict(base=90,  shoulder=177, elbow=62, wrist=134, wrist_rotate=90),
+    "left":  dict(base=45,  shoulder=176, elbow=62, wrist=112, wrist_rotate=55),
+    "right": dict(base=135, shoulder=176, elbow=62, wrist=112, wrist_rotate=125),
+    "outL":  dict(base=55,  shoulder=174, elbow=68, wrist=114, wrist_rotate=70),
+    "outR":  dict(base=125, shoulder=174, elbow=68, wrist=114, wrist_rotate=110),
 }
 
 
@@ -134,7 +134,7 @@ def a_outR():  move_to("outR", 0.6)
 
 
 def a_pump():                       # fist pump — stays HIGH, no low dip
-    for ang in (178, 168, 178, 168):
+    for ang in (179, 174, 179, 174):
         move_joints({"shoulder": ang}, seconds=0.28)
 
 
