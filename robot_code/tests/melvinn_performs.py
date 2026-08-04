@@ -108,18 +108,23 @@ def _music_alive():
 # shoulder pumps — never from dropping the arm down onto the chassis.
 # (shoulder centre 180 = straight up; smaller = tilted forward/down.)
 # ---------------------------------------------------------------------------
-MIN_SHOULDER = 178      # shoulder never goes below this (180 = straight up).
-                        # Basically vertical now; the base spin + wrist/twist
-                        # carry the dance so the arm stays clear of camera/case.
+MIN_SHOULDER = 180      # shoulder PINNED straight up — 180 IS the physical max
+                        # height, it can't go higher in software. The remaining
+                        # height is set by the ELBOW: higher elbow swings the
+                        # forearm outward/down, so keep it at/near its 45 centre
+                        # (the arm's natural, highest, chassis-clearing rest).
+                        # If it still reads low, that's the arm's mounting, not
+                        # these angles — it'd need remounting / a new elbow zero.
+MAX_ELBOW = 50          # elbow never above this, so the forearm stays folded up.
 
 POSES = {
     #             base  shoulder elbow  wrist  wrist_rotate
-    "up":    dict(base=90,  shoulder=180, elbow=48, wrist=104, wrist_rotate=90),
-    "tall":  dict(base=90,  shoulder=179, elbow=58, wrist=118, wrist_rotate=90),
-    "left":  dict(base=50,  shoulder=179, elbow=58, wrist=100, wrist_rotate=60),
-    "right": dict(base=130, shoulder=179, elbow=58, wrist=100, wrist_rotate=120),
-    "outL":  dict(base=60,  shoulder=178, elbow=62, wrist=106, wrist_rotate=75),
-    "outR":  dict(base=120, shoulder=178, elbow=62, wrist=106, wrist_rotate=105),
+    "up":    dict(base=90,  shoulder=180, elbow=45, wrist=95,  wrist_rotate=90),
+    "tall":  dict(base=90,  shoulder=180, elbow=45, wrist=105, wrist_rotate=90),
+    "left":  dict(base=50,  shoulder=180, elbow=45, wrist=95,  wrist_rotate=60),
+    "right": dict(base=130, shoulder=180, elbow=45, wrist=95,  wrist_rotate=120),
+    "outL":  dict(base=60,  shoulder=180, elbow=48, wrist=98,  wrist_rotate=75),
+    "outR":  dict(base=120, shoulder=180, elbow=48, wrist=98,  wrist_rotate=105),
 }
 
 
@@ -135,13 +140,13 @@ def a_outL():  move_to("outL", 0.6)
 def a_outR():  move_to("outR", 0.6)
 
 
-def a_pump():                       # fist pump — stays HIGH, no low dip
-    for ang in (180, 178, 180, 178):
-        move_joints({"shoulder": ang}, seconds=0.28)
+def a_pump():                       # energetic bounce — base jabs side to side (no dip)
+    for ang in (75, 105, 75, 105):
+        move_joints({"base": ang}, seconds=0.22)
 
 
-def a_wave():                       # hand wave from the wrist (kept up)
-    for ang in (85, 145, 85, 145):
+def a_wave():                       # hand wave from the wrist (near level)
+    for ang in (80, 115, 80, 115):
         move_joints({"wrist": ang}, seconds=0.25)
 
 
