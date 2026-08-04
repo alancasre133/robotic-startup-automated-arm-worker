@@ -38,6 +38,7 @@ import argparse
 import os
 import random
 import subprocess
+import threading
 from time import sleep
 
 # Reuse the REAL assistant capabilities so this behaves like the voice
@@ -47,7 +48,7 @@ import assistant
 from assistant import (
     MUSIC_DIR, _play_file, _stop_media,
     speak, set_face, show_text, move_joints, gripper, center_arm, robot_drive,
-    ARM_CENTER_ANGLES, ARM_JOINTS,
+    ARM_CENTER_ANGLES, ARM_JOINTS, _face_frame,
 )
 
 # The exact clip the performance is set to — audio extracted from HERE.
@@ -193,7 +194,18 @@ def w_hold():                        # let the arm carry this beat
 
 WHEEL_BEATS = [w_rock, w_wiggle, w_spin_r, w_spin_l, w_quarter, w_hold, w_hold]
 
-FACES = ["happy", "surprised", "love", "thinking", "neutral"]
+# ---------------------------------------------------------------------------
+# Screen show — runs in its OWN thread so the LCD is ALWAYS busy (lots of
+# expressions, flashing text, blinks, darting eyes, head-tilts, heart-eyes),
+# independent of the arm's timing. The face is SPI; the arm is I2C and wheels
+# are GPIO — separate hardware, so this thread never fights the arm/wheel loop.
+# ---------------------------------------------------------------------------
+SCREEN_FACES = ["happy", "surprised", "love", "thinking", "neutral",
+                "angry", "sad", "sleepy"]
+SCREEN_TEXTS = ["I'M NOT A ROBOT", "NOT A ROBOT!", "BEEP BOOP", "GUESS WHAT",
+                "I AM MELVINN", "WOOO!", "DANCE!", "ROBOT? ME?", "LA LA LA",
+                "01001101", "BZZT!", "ENCORE!"]
+EYE_DARTS = [(-16, 0), (16, 0), (0, -12), (0, 10), (-14, -8), (14, 8)]
 
 
 # ---------------------------------------------------------------------------
@@ -205,6 +217,45 @@ def _pick(pool, avoid):
     while len(pool) > 1 and c is avoid:
         c = random.choice(pool)
     return c
+
+
+def _nap(stop, secs):
+    """Sleep in small chunks so the thread reacts fast when the song ends."""
+    t = 0.0
+    while t < secs and not stop.is_set() and _music_alive():
+        sleep(0.05)
+        t += 0.05
+
+
+def _face_show(stop):
+    """Keep the LCD lively for the whole song — a stream of expressions,
+    flashing text, blinks, darting eyes, head-tilts and heart-eyes. Runs in a
+    daemon thread and is the ONLY thing that touches the screen during playback
+    (so the main loop must not call the face). Stops when `stop` is set or the
+    music ends."""
+    prev = None
+    i = 0
+    while not stop.is_set() and _music_alive():
+        i += 1
+        r = random.random()
+        if i % 6 == 0:                                # flash a phrase
+            show_text(random.choice(SCREEN_TEXTS))
+            _nap(stop, 0.9)
+        elif r < 0.18:                                # blink
+            set_face("blink")
+        elif r < 0.34:                                # dart the eyes, then re-centre
+            dx, dy = random.choice(EYE_DARTS)
+            _face_frame(pupil_dx=dx, pupil_dy=dy)
+            _nap(stop, 0.28)
+            _face_frame(pupil_dx=0, pupil_dy=0)
+        elif r < 0.46:                                # quick head-tilt bob
+            _face_frame(tilt=random.choice((-12, 12)))
+        elif r < 0.56:                                # heart-eyes flash
+            _face_frame(hearts=True, mouth="smile")
+        else:                                         # a fresh expression
+            prev = _pick(SCREEN_FACES, prev)
+            set_face(prev)
+        _nap(stop, random.uniform(0.28, 0.6))
 
 
 def _robot_line(text):
@@ -235,8 +286,7 @@ def perform(drive=True):
         print("[perform] Wheels ENABLED — MELVINN will move. Floor + room, please!")
 
     finished_clean = False
-    prev_face = prev_arm = None
-    beat = 0
+    prev_arm = None
     try:
         # --- INTRO: wake up, then the spoken hook (music not started yet) ---
         center_arm()
@@ -252,27 +302,23 @@ def perform(drive=True):
         set_face("happy")
         move_to("up", 0.8)                         # arm rises to "perform"
 
-        # --- BODY: face + BIG arm + VARIED wheels, until the track ends -----
-        while _music_alive():
-            beat += 1
-
-            # every ~8 beats, flash the hook on the LCD, then back to eyes
-            if beat % 8 == 0:
-                show_text("I'M NOT A ROBOT"); sleep(0.8)
-
-            f = _pick(FACES, prev_face); set_face(f); prev_face = f
-            if not _music_alive():
-                break
-
-            a = _pick(ARM_BEATS, prev_arm); a(); prev_arm = a
-            if not _music_alive():
-                break
-
-            if DRIVE and random.random() < 0.6:    # wheels on ~60% of beats
-                random.choice(WHEEL_BEATS)()
-
-            if beat % 5 == 0:
-                set_face("blink")
+        # --- BODY: the LCD runs its own lively show in a background thread
+        # (lots of faces + text + eye-darts) while the arm + wheels perform
+        # here. Separate hardware buses, so they don't collide.
+        stop_face = threading.Event()
+        face_thread = threading.Thread(target=_face_show, args=(stop_face,),
+                                       daemon=True)
+        face_thread.start()
+        try:
+            while _music_alive():
+                a = _pick(ARM_BEATS, prev_arm); a(); prev_arm = a
+                if not _music_alive():
+                    break
+                if DRIVE and random.random() < 0.6:   # wheels on ~60% of beats
+                    random.choice(WHEEL_BEATS)()
+        finally:
+            stop_face.set()
+            face_thread.join(timeout=2)
 
         finished_clean = True
 
