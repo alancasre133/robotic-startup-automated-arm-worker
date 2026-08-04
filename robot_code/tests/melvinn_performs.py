@@ -35,6 +35,7 @@ RUN (on the Pi)
 """
 
 import argparse
+import math
 import os
 import random
 import subprocess
@@ -107,18 +108,18 @@ def _music_alive():
 # shoulder pumps — never from dropping the arm down onto the chassis.
 # (shoulder centre 180 = straight up; smaller = tilted forward/down.)
 # ---------------------------------------------------------------------------
-MIN_SHOULDER = 174      # shoulder never goes below this (180 = straight up).
-                        # Raise it further toward 180 if the arm still grazes
-                        # the camera/case; lower cautiously only to reach forward.
+MIN_SHOULDER = 178      # shoulder never goes below this (180 = straight up).
+                        # Basically vertical now; the base spin + wrist/twist
+                        # carry the dance so the arm stays clear of camera/case.
 
 POSES = {
     #             base  shoulder elbow  wrist  wrist_rotate
-    "up":    dict(base=90,  shoulder=179, elbow=50, wrist=118, wrist_rotate=90),
-    "tall":  dict(base=90,  shoulder=177, elbow=62, wrist=134, wrist_rotate=90),
-    "left":  dict(base=45,  shoulder=176, elbow=62, wrist=112, wrist_rotate=55),
-    "right": dict(base=135, shoulder=176, elbow=62, wrist=112, wrist_rotate=125),
-    "outL":  dict(base=55,  shoulder=174, elbow=68, wrist=114, wrist_rotate=70),
-    "outR":  dict(base=125, shoulder=174, elbow=68, wrist=114, wrist_rotate=110),
+    "up":    dict(base=90,  shoulder=180, elbow=48, wrist=104, wrist_rotate=90),
+    "tall":  dict(base=90,  shoulder=179, elbow=58, wrist=118, wrist_rotate=90),
+    "left":  dict(base=50,  shoulder=179, elbow=58, wrist=100, wrist_rotate=60),
+    "right": dict(base=130, shoulder=179, elbow=58, wrist=100, wrist_rotate=120),
+    "outL":  dict(base=60,  shoulder=178, elbow=62, wrist=106, wrist_rotate=75),
+    "outR":  dict(base=120, shoulder=178, elbow=62, wrist=106, wrist_rotate=105),
 }
 
 
@@ -135,7 +136,7 @@ def a_outR():  move_to("outR", 0.6)
 
 
 def a_pump():                       # fist pump — stays HIGH, no low dip
-    for ang in (179, 174, 179, 174):
+    for ang in (180, 178, 180, 178):
         move_joints({"shoulder": ang}, seconds=0.28)
 
 
@@ -205,7 +206,8 @@ SCREEN_FACES = ["happy", "surprised", "love", "thinking", "neutral",
 SCREEN_TEXTS = ["I'M NOT A ROBOT", "NOT A ROBOT!", "BEEP BOOP", "GUESS WHAT",
                 "I AM MELVINN", "WOOO!", "DANCE!", "ROBOT? ME?", "LA LA LA",
                 "01001101", "BZZT!", "ENCORE!"]
-EYE_DARTS = [(-16, 0), (16, 0), (0, -12), (0, 10), (-14, -8), (14, 8)]
+COLORS = [(60, 210, 255), (255, 90, 150), (255, 140, 40),
+          (120, 255, 180), (255, 230, 80), (170, 120, 255)]  # cyan/pink/orange/mint/yellow/purple
 
 
 # ---------------------------------------------------------------------------
@@ -227,35 +229,77 @@ def _nap(stop, secs):
         t += 0.05
 
 
+# --- multi-frame animations (each plays several frames on the LCD) ---------
+def _anim_look_around(stop):            # eyes glance around, then re-centre
+    for dx, dy in ((-16, 0), (16, 0), (0, -12), (0, 12), (0, 0)):
+        _face_frame(pupil_dx=dx, pupil_dy=dy)
+        _nap(stop, 0.16)
+
+
+def _anim_eye_roll(stop):               # pupils sweep a full circle
+    for k in range(8):
+        a = k / 8 * 2 * math.pi
+        _face_frame(pupil_dx=int(15 * math.cos(a)), pupil_dy=int(11 * math.sin(a)))
+        _nap(stop, 0.08)
+    _face_frame(pupil_dx=0, pupil_dy=0)
+
+
+def _anim_pulse(stop):                  # eyes grow/shrink to the beat
+    for o in (1.0, 0.5, 1.3, 0.7, 1.0):
+        _face_frame(openness=o)
+        _nap(stop, 0.11)
+
+
+def _anim_wobble(stop):                 # head shake (tilt left/right)
+    for t in (-12, 12, -10, 8, 0):
+        _face_frame(tilt=t)
+        _nap(stop, 0.13)
+
+
+def _anim_color_flash(stop):            # disco eye colours
+    for c in COLORS:
+        _face_frame(color=c)
+        _nap(stop, 0.15)
+
+
+def _anim_double_blink(stop):
+    set_face("blink"); set_face("blink")
+
+
+def _anim_hearts(stop):                 # heart-eyes hold
+    _face_frame(hearts=True, mouth="smile")
+    _nap(stop, 0.5)
+
+
+def _anim_zzz(stop):                    # cheeky "bored" beat
+    _face_frame(openness=0.25, zzz=True)
+    _nap(stop, 0.6)
+
+
+ANIMS = [_anim_look_around, _anim_eye_roll, _anim_pulse, _anim_wobble,
+         _anim_color_flash, _anim_double_blink, _anim_hearts, _anim_zzz]
+
+
 def _face_show(stop):
-    """Keep the LCD lively for the whole song — a stream of expressions,
-    flashing text, blinks, darting eyes, head-tilts and heart-eyes. Runs in a
-    daemon thread and is the ONLY thing that touches the screen during playback
-    (so the main loop must not call the face). Stops when `stop` is set or the
-    music ends."""
+    """Keep the LCD alive the whole song — a fast stream of expressions,
+    flashing text, and multi-frame animations (eye-rolls, look-arounds, pulses,
+    head-shakes, colour flashes, hearts, zzz). Runs in a daemon thread and is
+    the ONLY thing that touches the screen during playback. Stops when `stop`
+    is set or the music ends."""
     prev = None
     i = 0
     while not stop.is_set() and _music_alive():
         i += 1
         r = random.random()
-        if i % 6 == 0:                                # flash a phrase
+        if i % 5 == 0:                       # flash a phrase
             show_text(random.choice(SCREEN_TEXTS))
             _nap(stop, 0.9)
-        elif r < 0.18:                                # blink
-            set_face("blink")
-        elif r < 0.34:                                # dart the eyes, then re-centre
-            dx, dy = random.choice(EYE_DARTS)
-            _face_frame(pupil_dx=dx, pupil_dy=dy)
-            _nap(stop, 0.28)
-            _face_frame(pupil_dx=0, pupil_dy=0)
-        elif r < 0.46:                                # quick head-tilt bob
-            _face_frame(tilt=random.choice((-12, 12)))
-        elif r < 0.56:                                # heart-eyes flash
-            _face_frame(hearts=True, mouth="smile")
-        else:                                         # a fresh expression
+        elif r < 0.45:                       # a fresh expression
             prev = _pick(SCREEN_FACES, prev)
             set_face(prev)
-        _nap(stop, random.uniform(0.28, 0.6))
+        else:                                # a multi-frame animation
+            random.choice(ANIMS)(stop)
+        _nap(stop, random.uniform(0.22, 0.5))
 
 
 def _robot_line(text):
