@@ -99,19 +99,25 @@ def _music_alive():
 
 
 # ---------------------------------------------------------------------------
-# Arm vocabulary — BIG, distinct poses. Angles stay inside safe ranges tuned
-# on the real robot (shoulder centre 180 / elbow 45; reaching-forward pose in
-# the URDF model uses shoulder~90, so 105-180 is comfortable). Every beat moves
-# the arm clearly — the earlier version barely nudged it.
+# Arm vocabulary — BIG, distinct poses, but kept HIGH. The arm fouls MELVINN's
+# FRONT (the camera + case) if the shoulder drops too far forward, so every
+# pose stays at/above MIN_SHOULDER. The "big movement" comes from SAFE joints —
+# horizontal base sweeps, wrist waves, wrist twists, gripper claps, and high
+# shoulder pumps — never from dropping the arm down onto the chassis.
+# (shoulder centre 180 = straight up; smaller = tilted forward/down.)
 # ---------------------------------------------------------------------------
+MIN_SHOULDER = 155      # shoulder never goes below this. Raise it if the arm
+                        # still grazes the camera/case; lower it (cautiously)
+                        # only if you want the arm to reach further forward.
+
 POSES = {
     #             base  shoulder elbow  wrist  wrist_rotate
-    "up":    dict(base=90,  shoulder=175, elbow=55,  wrist=120, wrist_rotate=90),
-    "reach": dict(base=90,  shoulder=105, elbow=110, wrist=90,  wrist_rotate=90),
-    "left":  dict(base=40,  shoulder=135, elbow=90,  wrist=80,  wrist_rotate=55),
-    "right": dict(base=140, shoulder=135, elbow=90,  wrist=100, wrist_rotate=125),
-    "bow":   dict(base=90,  shoulder=115, elbow=115, wrist=55,  wrist_rotate=90),
-    "high":  dict(base=90,  shoulder=170, elbow=70,  wrist=140, wrist_rotate=90),
+    "up":    dict(base=90,  shoulder=176, elbow=55, wrist=120, wrist_rotate=90),
+    "tall":  dict(base=90,  shoulder=165, elbow=72, wrist=140, wrist_rotate=90),
+    "left":  dict(base=45,  shoulder=160, elbow=72, wrist=112, wrist_rotate=55),
+    "right": dict(base=135, shoulder=160, elbow=72, wrist=112, wrist_rotate=125),
+    "outL":  dict(base=55,  shoulder=158, elbow=80, wrist=118, wrist_rotate=70),
+    "outR":  dict(base=125, shoulder=158, elbow=80, wrist=118, wrist_rotate=110),
 }
 
 
@@ -120,29 +126,29 @@ def move_to(name, t=0.7):
 
 
 def a_up():    move_to("up", 0.6)
-def a_reach(): move_to("reach", 0.7)
+def a_tall():  move_to("tall", 0.6)
 def a_left():  move_to("left", 0.6)
 def a_right(): move_to("right", 0.6)
-def a_bow():   move_to("bow", 0.7)
-def a_high():  move_to("high", 0.6)
+def a_outL():  move_to("outL", 0.6)
+def a_outR():  move_to("outR", 0.6)
 
 
-def a_pump():                       # fist pump — big vertical shoulder swing
-    for ang in (175, 120, 175, 120):
+def a_pump():                       # fist pump — stays HIGH, no low dip
+    for ang in (176, 158, 176, 158):
         move_joints({"shoulder": ang}, seconds=0.28)
 
 
-def a_wave():                       # hand wave from the wrist
-    for ang in (45, 135, 45, 135):
+def a_wave():                       # hand wave from the wrist (kept up)
+    for ang in (85, 145, 85, 145):
         move_joints({"wrist": ang}, seconds=0.25)
 
 
-def a_twist():                      # wrist_rotate twist
+def a_twist():                      # wrist_rotate twist — no vertical change
     for ang in (25, 155, 90):
         move_joints({"wrist_rotate": ang}, seconds=0.3)
 
 
-def a_sweep():                      # big slow pan across the base
+def a_sweep():                      # big slow pan across the base (horizontal)
     move_joints({"base": 40}, seconds=0.6)
     move_joints({"base": 140}, seconds=0.9)
 
@@ -152,7 +158,7 @@ def a_clap():                       # gripper "hands"
         gripper("open"); gripper("close")
 
 
-ARM_BEATS = [a_up, a_reach, a_left, a_right, a_bow, a_high,
+ARM_BEATS = [a_up, a_tall, a_left, a_right, a_outL, a_outR,
              a_pump, a_wave, a_twist, a_sweep, a_clap]
 
 
@@ -244,7 +250,7 @@ def perform(drive=True):
             print("[perform]", err)
             return
         set_face("happy")
-        move_to("high", 0.8)                       # arm rises to "perform"
+        move_to("up", 0.8)                         # arm rises to "perform"
 
         # --- BODY: face + BIG arm + VARIED wheels, until the track ends -----
         while _music_alive():
