@@ -206,11 +206,36 @@ WHEEL_BEATS = [w_rock, w_wiggle, w_spin_r, w_spin_l, w_quarter, w_hold, w_hold]
 # independent of the arm's timing. The face is SPI; the arm is I2C and wheels
 # are GPIO — separate hardware, so this thread never fights the arm/wheel loop.
 # ---------------------------------------------------------------------------
-SCREEN_FACES = ["happy", "surprised", "love", "thinking", "neutral",
-                "angry", "sad", "sleepy"]
+# 21 emotional face "styles" built from _face_frame params (openness, gaze,
+# tilt, brows, mouth, colour, hearts) — far beyond the handful of built-in
+# expressions. Each maps a name -> kwargs passed straight to _face_frame.
+EMOTIONS = {
+    "neutral":    {},
+    "happy":      dict(openness=1.05, mouth="smile"),
+    "excited":    dict(openness=1.35, mouth="smile", color=(120, 255, 180)),
+    "joyful":     dict(openness=1.15, mouth="smile", color=(255, 230, 80)),
+    "love":       dict(hearts=True, mouth="smile"),
+    "smitten":    dict(hearts=True, tilt=8),
+    "surprised":  dict(openness=1.15, mouth="o"),
+    "shocked":    dict(openness=1.45, mouth="o", pupil_dy=-3),
+    "angry":      dict(openness=0.8, color=(255, 140, 40), brow=16, mouth="frown"),
+    "furious":    dict(openness=0.7, color=(255, 60, 30), brow=22, mouth="frown"),
+    "sad":        dict(openness=0.6, pupil_dy=10, tilt=-8, mouth="frown"),
+    "worried":    dict(openness=0.8, brow=-12, mouth="frown", pupil_dy=6),
+    "suspicious": dict(openness=0.5, pupil_dx=16, brow=8),
+    "mischief":   dict(openness=0.85, pupil_dx=-14, brow=10, mouth="smile", tilt=6),
+    "cool":       dict(openness=0.5, color=(255, 230, 80), mouth="smile"),
+    "playful":    dict(openness=1.1, mouth="smile", pupil_dx=12, tilt=-6),
+    "sassy":      dict(openness=0.6, pupil_dx=18, tilt=8, mouth="smile"),
+    "proud":      dict(openness=1.0, brow=-6, mouth="smile", color=(255, 215, 0)),
+    "thinking":   dict(pupil_dx=-14, pupil_dy=-12),
+    "bored":      dict(openness=0.45, pupil_dy=8),
+    "sleepy":     dict(openness=0.22, zzz=True),
+}
 SCREEN_TEXTS = ["I'M NOT A ROBOT", "NOT A ROBOT!", "BEEP BOOP", "GUESS WHAT",
                 "I AM MELVINN", "WOOO!", "DANCE!", "ROBOT? ME?", "LA LA LA",
-                "01001101", "BZZT!", "ENCORE!"]
+                "01001101", "BZZT!", "ENCORE!", "I FEEL ALIVE", "SO HAPPY!",
+                "GRRR", "<3 <3 <3", "WHEEE!"]
 COLORS = [(60, 210, 255), (255, 90, 150), (255, 140, 40),
           (120, 255, 180), (255, 230, 80), (170, 120, 255)]  # cyan/pink/orange/mint/yellow/purple
 
@@ -281,27 +306,61 @@ def _anim_zzz(stop):                    # cheeky "bored" beat
     _nap(stop, 0.6)
 
 
+def _anim_laugh(stop):                  # belly laugh — eyes bounce with a grin
+    for o in (1.15, 0.5, 1.25, 0.5, 1.15):
+        _face_frame(openness=o, mouth="smile")
+        _nap(stop, 0.11)
+
+
+def _anim_cry(stop):                    # teary wobble — blue tint, frown
+    for dy in (8, 12, 8, 13, 8):
+        _face_frame(openness=0.55, pupil_dy=dy, tilt=-8, mouth="frown",
+                    color=(90, 160, 255))
+        _nap(stop, 0.14)
+
+
+def _anim_rage(stop):                   # red, furrowed, shaking with anger
+    for t in (-10, 10, -10, 10, 0):
+        _face_frame(openness=0.75, color=(255, 60, 30), brow=20,
+                    mouth="frown", tilt=t)
+        _nap(stop, 0.10)
+
+
+def _anim_swoon(stop):                  # heart-eyes swaying dreamily
+    for t in (-10, 10, -6, 6, 0):
+        _face_frame(hearts=True, mouth="smile", tilt=t)
+        _nap(stop, 0.13)
+
+
+def _anim_shock(stop):                  # eyes pop wide, jaw drops
+    for o in (1.0, 1.45, 1.2, 1.45):
+        _face_frame(openness=o, mouth="o", pupil_dy=-3)
+        _nap(stop, 0.12)
+
+
 ANIMS = [_anim_look_around, _anim_eye_roll, _anim_pulse, _anim_wobble,
-         _anim_color_flash, _anim_double_blink, _anim_hearts, _anim_zzz]
+         _anim_color_flash, _anim_double_blink, _anim_hearts, _anim_zzz,
+         _anim_laugh, _anim_cry, _anim_rage, _anim_swoon, _anim_shock]
 
 
 def _face_show(stop):
-    """Keep the LCD alive the whole song — a fast stream of expressions,
-    flashing text, and multi-frame animations (eye-rolls, look-arounds, pulses,
-    head-shakes, colour flashes, hearts, zzz). Runs in a daemon thread and is
-    the ONLY thing that touches the screen during playback. Stops when `stop`
-    is set or the music ends."""
+    """Keep the LCD alive the whole song — a fast stream of 21 emotional face
+    styles, flashing text, and 13 multi-frame animations (laugh, cry, rage,
+    swoon, shock, eye-rolls, pulses, colour flashes, hearts, zzz...). Runs in a
+    daemon thread and is the ONLY thing that touches the screen during
+    playback. Stops when `stop` is set or the music ends."""
+    names = list(EMOTIONS)
     prev = None
     i = 0
     while not stop.is_set() and _music_alive():
         i += 1
         r = random.random()
-        if i % 5 == 0:                       # flash a phrase
+        if i % 6 == 0:                       # flash a phrase
             show_text(random.choice(SCREEN_TEXTS))
-            _nap(stop, 0.9)
-        elif r < 0.45:                       # a fresh expression
-            prev = _pick(SCREEN_FACES, prev)
-            set_face(prev)
+            _nap(stop, 0.85)
+        elif r < 0.5:                        # a fresh emotional face
+            prev = _pick(names, prev)
+            _face_frame(**EMOTIONS[prev])
         else:                                # a multi-frame animation
             random.choice(ANIMS)(stop)
         _nap(stop, random.uniform(0.22, 0.5))
