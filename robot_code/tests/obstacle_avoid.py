@@ -29,7 +29,7 @@ from time import sleep
 # --- Config ------------------------------------------------------------------
 TRIG_PIN       = 13       # BCM (Pi pin 33)
 ECHO_PIN       = 19       # BCM (Pi pin 35, behind voltage divider)
-STOP_DISTANCE  = 0.25     # metres — stop if obstacle is closer than this
+STOP_DISTANCE  = 0.50     # metres — stop if obstacle is closer than this
 TURN_TIME      = 0.8      # seconds to turn when blocked
 POLL_INTERVAL  = 0.05     # seconds between distance readings
 
