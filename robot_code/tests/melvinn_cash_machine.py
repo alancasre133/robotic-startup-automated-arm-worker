@@ -38,8 +38,11 @@ TEXTS = ["CASH MACHINE", "KA-CHING!", "$$$", "MONEY!", "GET PAID", "CA$H",
 GREEN  = (60, 200, 90)
 GOLD   = (255, 205, 60)
 SKIN   = (240, 200, 165)
-HAIR   = (95, 60, 32)     # brown bowl cut
-HOODIE = (225, 95, 70)    # baggy bold hoodie
+HAIR   = (95, 60, 32)      # brown bowl cut
+GLASS  = (250, 190, 70)    # amber-tinted lenses
+WB1    = (40, 170, 160)    # windbreaker teal
+WB2    = (225, 70, 140)    # windbreaker magenta block
+WBW    = (235, 235, 240)   # windbreaker white accents
 
 
 def _font(size):
@@ -141,24 +144,30 @@ def _anim_cashrain(stop):           # dollar bills fluttering down
 
 # --- pixel-art Oliver Tree (bowl cut + big mustache + hoodie) ---------------
 OLIVER = [
-    "....HHHHHH....",
-    "..HHHHHHHHHH..",
-    ".HHHHHHHHHHHH.",
-    "HHHHHHHHHHHHHH",
-    "HHHHHHHHHHHHHH",
-    "HHSSSSSSSSSSHH",
-    ".SSSSSSSSSSSS.",
-    ".SSKSSSSSSKSS.",
-    ".SSSSSSSSSSSS.",
-    ".SKKKKKKKKKKS.",
-    ".SSKKKKKKKKSS.",
-    ".SSSSSSSSSSSS.",
-    "..SSSSSSSSSS..",
-    "...CCCCCCCC...",
-    ".CCCCCCCCCCCC.",
-    "CCCCCCCCCCCCCC",
+    ".....HHHHHH.....",   # bowl cut
+    "...HHHHHHHHHH...",
+    "..HHHHHHHHHHHH..",
+    ".HHHHHHHHHHHHHH.",
+    "HHHHHHHHHHHHHHHH",
+    "HHHHHHHHHHHHHHHH",
+    "HHSSSSSSSSSSSSHH",   # forehead + sideburns
+    "SSKKKKSKKSKKKKSS",   # glasses: frames + bridge
+    "SSKGGKSSSSKGGKSS",   # amber lenses
+    "SSKKKKSSSSKKKKSS",   # glasses bottom
+    ".SSSSSSSSSSSSSS.",
+    ".SKKKKKKKKKKKKS.",   # big mustache
+    ".SSKKKKKKKKKKSS.",
+    "..SSSSSSSSSSSS..",   # chin
+    "...SSSSSSSSSS...",
+    "....CCCCCCCC....",   # windbreaker collar
+    "..WWCCCCCCCCWW..",   # shoulders (white accents)
+    ".CCCCDDDDDDCCCC.",   # color-blocked chest
+    ".CCCCDDDDDDCCCC.",
+    ".CCCCCCCCCCCCCC.",
+    "CCCCCCCCCCCCCCCC",   # baggy hem
 ]
-OCMAP = {"H": HAIR, "S": SKIN, "K": (20, 20, 20), "C": HOODIE}
+OCMAP = {"H": HAIR, "S": SKIN, "K": (20, 20, 20), "G": GLASS,
+         "C": WB1, "D": WB2, "W": WBW}
 
 
 def _sprite(d, rows, cmap, x, y, px, gap=1):
@@ -183,7 +192,7 @@ def _anim_oliver(stop):             # pixel-art Oliver Tree bops across
         f, img, d = _canvas()
         if not f:
             return
-        _sprite(d, OLIVER, OCMAP, x, H//2 + (-3 if i % 2 else 3), 11)
+        _sprite(d, OLIVER, OCMAP, x, H//2 + (-3 if i % 2 else 3), 10)
         f.display(img)
         _nap(stop, 0.13)
         if stop.is_set() or not _music_alive():
