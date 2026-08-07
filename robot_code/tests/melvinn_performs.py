@@ -52,11 +52,15 @@ from assistant import (
     ARM_CENTER_ANGLES, ARM_JOINTS, _face_frame,
 )
 
-# The exact clip the performance is set to — audio extracted from HERE.
-VIDEO_URL = "https://www.youtube.com/watch?v=CycD3e7UaDM"
-# Deterministic filename so we always find/play THIS audio (not the Marina
-# studio mp3 that may also be sitting in ~/music).
-SONG_PATH = os.path.join(MUSIC_DIR, "robothespians_not_a_robot.mp3")
+# --- default performance = "I Am Not A Robot" (the RoboThespians clip) -------
+# This whole file is a reusable engine: another song just calls
+#   perform(source=…, song_path=…, intro=…, outro=…, texts=…)
+# `source` is anything yt-dlp accepts — a URL, or "ytsearch1:<query>".
+# See melvinn_cash_machine.py for a second song built on this.
+DEFAULT_SOURCE    = "https://www.youtube.com/watch?v=CycD3e7UaDM"   # exact clip
+DEFAULT_SONG_PATH = os.path.join(MUSIC_DIR, "robothespians_not_a_robot.mp3")
+DEFAULT_INTRO     = "I… am NOT… a robot!"
+DEFAULT_OUTRO     = "Thank you! I hope you enjoyed the show."
 
 DRIVE = True          # wheels enabled? toggled by --no-drive
 
@@ -64,29 +68,31 @@ DRIVE = True          # wheels enabled? toggled by --no-drive
 # ---------------------------------------------------------------------------
 # Audio: extract the robots'-video track to ~/music once (needs internet once)
 # ---------------------------------------------------------------------------
-def ensure_audio():
-    if os.path.exists(SONG_PATH):
-        return SONG_PATH
+def ensure_audio(source, path):
+    """Extract `source` (a URL, or a yt-dlp "ytsearch1:<query>") to `path` as
+    mp3, once. Returns the path, or None if it couldn't be fetched."""
+    if os.path.exists(path):
+        return path
     if not _which("yt-dlp"):
         print("[perform] yt-dlp not installed — run: pip install -U --break-system-packages yt-dlp")
         return None
-    os.makedirs(MUSIC_DIR, exist_ok=True)
-    out = os.path.join(MUSIC_DIR, "robothespians_not_a_robot.%(ext)s")
-    print("[perform] Extracting the robots'-video audio to ~/music (once)…")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    out = os.path.splitext(path)[0] + ".%(ext)s"   # deterministic filename
+    print(f"[perform] Fetching audio to {os.path.basename(path)} (once)…")
     # Try player clients in order to dodge YouTube's 403s from a missing JS runtime.
     for client in ("web", "android", "tv"):
         r = subprocess.run(
             ["yt-dlp", "-x", "--audio-format", "mp3", "--audio-quality", "5",
              "--no-playlist", "--output", out,
              "--extractor-args", f"youtube:player_client={client}",
-             VIDEO_URL],
+             source],
             capture_output=True, text=True, timeout=300,
         )
-        if r.returncode == 0 and os.path.exists(SONG_PATH):
-            return SONG_PATH
+        if r.returncode == 0 and os.path.exists(path):
+            return path
     tail = (r.stderr or "").strip().splitlines()[-1:] or [""]
     print("[perform] Download failed:", tail[0])
-    return SONG_PATH if os.path.exists(SONG_PATH) else None
+    return path if os.path.exists(path) else None
 
 
 def _which(name):
@@ -101,72 +107,74 @@ def _music_alive():
 
 
 # ---------------------------------------------------------------------------
-# Arm vocabulary — BIG, distinct poses, but kept HIGH. The arm fouls MELVINN's
-# FRONT (the camera + case) if the shoulder drops too far forward, so every
-# pose stays at/above MIN_SHOULDER. The "big movement" comes from SAFE joints —
-# horizontal base sweeps, wrist waves, wrist twists, gripper claps, and high
-# shoulder pumps — never from dropping the arm down onto the chassis.
-# (shoulder centre 180 = straight up; smaller = tilted forward/down.)
+# Arm vocabulary — STRICTLY VERTICAL. The arm base sits up on the second tier
+# right beside the mic + batteries, so the arm must NOT reach outward or dip or
+# it hits the components below/around it. Every pose therefore keeps the
+# vertical invariant (shoulder=180 straight up, elbow=45, wrist=90 — its exact
+# chassis-clearing centre); ALL movement comes from rotating the whole vertical
+# arm about the BASE and twisting WRIST_ROTATE, plus the gripper. The arm spins
+# and twists in place above its own footprint and can't strike anything.
 # ---------------------------------------------------------------------------
-MIN_SHOULDER = 180      # shoulder PINNED straight up — 180 IS the physical max
-                        # height, it can't go higher in software. The remaining
-                        # height is set by the ELBOW: higher elbow swings the
-                        # forearm outward/down, so keep it at/near its 45 centre
-                        # (the arm's natural, highest, chassis-clearing rest).
-                        # If it still reads low, that's the arm's mounting, not
-                        # these angles — it'd need remounting / a new elbow zero.
-MAX_ELBOW = 50          # elbow never above this, so the forearm stays folded up.
+VERT = dict(shoulder=180, elbow=45, wrist=90)   # the "keep it high" invariant
 
 POSES = {
-    #             base  shoulder elbow  wrist  wrist_rotate
-    "up":    dict(base=90,  shoulder=180, elbow=45, wrist=95,  wrist_rotate=90),
-    "tall":  dict(base=90,  shoulder=180, elbow=45, wrist=105, wrist_rotate=90),
-    "left":  dict(base=50,  shoulder=180, elbow=45, wrist=95,  wrist_rotate=60),
-    "right": dict(base=130, shoulder=180, elbow=45, wrist=95,  wrist_rotate=120),
-    "outL":  dict(base=60,  shoulder=180, elbow=48, wrist=98,  wrist_rotate=75),
-    "outR":  dict(base=120, shoulder=180, elbow=48, wrist=98,  wrist_rotate=105),
+    #            base  + vertical invariant + wrist_rotate
+    "up":     dict(base=90,  wrist_rotate=90,  **VERT),
+    "left":   dict(base=48,  wrist_rotate=60,  **VERT),
+    "right":  dict(base=132, wrist_rotate=120, **VERT),
+    "farL":   dict(base=22,  wrist_rotate=70,  **VERT),
+    "farR":   dict(base=158, wrist_rotate=110, **VERT),
+    "twistL": dict(base=90,  wrist_rotate=28,  **VERT),
+    "twistR": dict(base=90,  wrist_rotate=152, **VERT),
 }
 
 
-def move_to(name, t=0.7):
+def move_to(name, t=0.6):
     move_joints(POSES[name], seconds=t)
 
 
-def a_up():    move_to("up", 0.6)
-def a_tall():  move_to("tall", 0.6)
-def a_left():  move_to("left", 0.6)
-def a_right(): move_to("right", 0.6)
-def a_outL():  move_to("outL", 0.6)
-def a_outR():  move_to("outR", 0.6)
+def a_up():     move_to("up", 0.5)
+def a_left():   move_to("left", 0.5)
+def a_right():  move_to("right", 0.5)
+def a_farL():   move_to("farL", 0.6)
+def a_farR():   move_to("farR", 0.6)
+def a_twistL(): move_to("twistL", 0.5)
+def a_twistR(): move_to("twistR", 0.5)
 
 
-def a_pump():                       # energetic bounce — base jabs side to side (no dip)
-    for ang in (75, 105, 75, 105):
-        move_joints({"base": ang}, seconds=0.22)
+def a_spin():                       # slow full-width base pan (arm stays vertical)
+    move_joints({"base": 20}, seconds=0.7)
+    move_joints({"base": 160}, seconds=1.1)
 
 
-def a_wave():                       # hand wave from the wrist (near level)
-    for ang in (80, 115, 80, 115):
-        move_joints({"wrist": ang}, seconds=0.25)
+def a_shimmy():                     # quick side-to-side base wiggle
+    for ang in (70, 110, 70, 110, 90):
+        move_joints({"base": ang}, seconds=0.16)
 
 
-def a_twist():                      # wrist_rotate twist — no vertical change
-    for ang in (25, 155, 90):
-        move_joints({"wrist_rotate": ang}, seconds=0.3)
+def a_screw():                      # continuous wrist twist (the "cash" spin)
+    for ang in (25, 155, 25, 155, 90):
+        move_joints({"wrist_rotate": ang}, seconds=0.22)
 
 
-def a_sweep():                      # big slow pan across the base (horizontal)
-    move_joints({"base": 40}, seconds=0.6)
-    move_joints({"base": 140}, seconds=0.9)
+def a_bounce():                     # energetic base jabs
+    for ang in (80, 100, 80, 100):
+        move_joints({"base": ang}, seconds=0.18)
 
 
 def a_clap():                       # gripper "hands"
-    for _ in range(2):
+    for _ in range(3):
         gripper("open"); gripper("close")
 
 
-ARM_BEATS = [a_up, a_tall, a_left, a_right, a_outL, a_outR,
-             a_pump, a_wave, a_twist, a_sweep, a_clap]
+def a_grab():                       # "counting cash" — twist + grip together
+    for ang in (55, 125):
+        move_joints({"wrist_rotate": ang}, seconds=0.2)
+        gripper("close"); gripper("open")
+
+
+ARM_BEATS = [a_up, a_left, a_right, a_farL, a_farR, a_twistL, a_twistR,
+             a_spin, a_shimmy, a_screw, a_bounce, a_clap, a_grab]
 
 
 # ---------------------------------------------------------------------------
@@ -381,11 +389,14 @@ def _rest():
     move_joints({j: ARM_CENTER_ANGLES[j] for j in ARM_JOINTS}, seconds=1.2)
 
 
-def perform(drive=True):
-    global DRIVE
+def perform(drive=True, source=DEFAULT_SOURCE, song_path=DEFAULT_SONG_PATH,
+            intro=DEFAULT_INTRO, outro=DEFAULT_OUTRO, texts=None):
+    global DRIVE, SCREEN_TEXTS
     DRIVE = drive
+    if texts:
+        SCREEN_TEXTS = texts        # the LCD thread reads this module global
 
-    song = ensure_audio()
+    song = ensure_audio(source, song_path)
     if not song:
         print("[perform] Couldn't get the audio — aborting.")
         return
@@ -400,7 +411,7 @@ def perform(drive=True):
         center_arm()
         set_face("sleepy"); sleep(0.6)
         set_face("blink"); set_face("surprised")
-        _robot_line("I… am NOT… a robot!")
+        _robot_line(intro)
 
         # --- MUSIC ON --- (grabs the exclusive audio device from here) ------
         err = _play_file(song)
@@ -444,7 +455,7 @@ def perform(drive=True):
     _rest()
     set_face("blink")
     if finished_clean:
-        _robot_line("Thank you! I hope you enjoyed the show.")
+        _robot_line(outro)
     set_face("happy")
     print("[perform] Done.")
 
