@@ -38,6 +38,7 @@ import argparse
 import math
 import os
 import random
+import re
 import subprocess
 import threading
 from time import sleep
@@ -100,10 +101,31 @@ def _which(name):
     return which(name)
 
 
+_STANDALONE = False     # True while an animation runs OUTSIDE a show
+                        # (assistant's play_animation tool via play_anim.py)
+
+
 def _music_alive():
-    """True while the mpg123 track is still playing."""
+    """True while the mpg123 track is still playing. In standalone-animation
+    mode there's no music to gate on, so it's always True — the animation
+    just runs to its own end."""
+    if _STANDALONE:
+        return True
     p = assistant._music_proc
     return p is not None and p.poll() is None
+
+
+def run_animation(fn, repeats=2):
+    """Run one animation outside a show (no music gate). Used by play_anim.py
+    for the assistant's play_animation tool."""
+    global _STANDALONE
+    _STANDALONE = True
+    try:
+        stop = threading.Event()
+        for _ in range(repeats):
+            fn(stop)
+    finally:
+        _STANDALONE = False
 
 
 # ---------------------------------------------------------------------------
@@ -214,32 +236,10 @@ WHEEL_BEATS = [w_rock, w_wiggle, w_spin_r, w_spin_l, w_quarter, w_hold, w_hold]
 # independent of the arm's timing. The face is SPI; the arm is I2C and wheels
 # are GPIO — separate hardware, so this thread never fights the arm/wheel loop.
 # ---------------------------------------------------------------------------
-# 21 emotional face "styles" built from _face_frame params (openness, gaze,
-# tilt, brows, mouth, colour, hearts) — far beyond the handful of built-in
-# expressions. Each maps a name -> kwargs passed straight to _face_frame.
-EMOTIONS = {
-    "neutral":    {},
-    "happy":      dict(openness=1.05, mouth="smile"),
-    "excited":    dict(openness=1.35, mouth="smile", color=(120, 255, 180)),
-    "joyful":     dict(openness=1.15, mouth="smile", color=(255, 230, 80)),
-    "love":       dict(hearts=True, mouth="smile"),
-    "smitten":    dict(hearts=True, tilt=8),
-    "surprised":  dict(openness=1.15, mouth="o"),
-    "shocked":    dict(openness=1.45, mouth="o", pupil_dy=-3),
-    "angry":      dict(openness=0.8, color=(255, 140, 40), brow=16, mouth="frown"),
-    "furious":    dict(openness=0.7, color=(255, 60, 30), brow=22, mouth="frown"),
-    "sad":        dict(openness=0.6, pupil_dy=10, tilt=-8, mouth="frown"),
-    "worried":    dict(openness=0.8, brow=-12, mouth="frown", pupil_dy=6),
-    "suspicious": dict(openness=0.5, pupil_dx=16, brow=8),
-    "mischief":   dict(openness=0.85, pupil_dx=-14, brow=10, mouth="smile", tilt=6),
-    "cool":       dict(openness=0.5, color=(255, 230, 80), mouth="smile"),
-    "playful":    dict(openness=1.1, mouth="smile", pupil_dx=12, tilt=-6),
-    "sassy":      dict(openness=0.6, pupil_dx=18, tilt=8, mouth="smile"),
-    "proud":      dict(openness=1.0, brow=-6, mouth="smile", color=(255, 215, 0)),
-    "thinking":   dict(pupil_dx=-14, pupil_dy=-12),
-    "bored":      dict(openness=0.45, pupil_dy=8),
-    "sleepy":     dict(openness=0.22, zzz=True),
-}
+# Emotional face styles come from the assistant's shared _EXPRESSIONS table
+# (the extended moods were promoted there so they also work by voice —
+# "look suspicious"). Each entry is kwargs passed straight to _face_frame.
+EMOTIONS = dict(assistant._EXPRESSIONS)
 SCREEN_TEXTS = ["I'M NOT A ROBOT", "NOT A ROBOT!", "BEEP BOOP", "GUESS WHAT",
                 "I AM MELVINN", "WOOO!", "DANCE!", "ROBOT? ME?", "LA LA LA",
                 "01001101", "BZZT!", "ENCORE!", "I FEEL ALIVE", "SO HAPPY!",
@@ -505,6 +505,18 @@ ANIMS = [_anim_look_around, _anim_eye_roll, _anim_pulse, _anim_wobble,
 
 EXTRA_ANIMS = []        # per-song extra picture animations, set by perform()
 
+# Friendly name -> animation, for standalone playback (assistant's
+# play_animation tool via play_anim.py). melvinn_cash_machine adds its own.
+ANIM_NAMES = {
+    "look around": _anim_look_around, "eye roll": _anim_eye_roll,
+    "pulse": _anim_pulse, "wobble": _anim_wobble,
+    "color flash": _anim_color_flash, "hearts": _anim_hearts,
+    "zzz": _anim_zzz, "laugh": _anim_laugh, "cry": _anim_cry,
+    "rage": _anim_rage, "swoon": _anim_swoon, "shock": _anim_shock,
+    "moon": _anim_moon, "witch": _anim_witch, "ghost": _anim_ghost,
+    "bat": _anim_bat, "spell": _anim_spell, "starfield": _anim_starfield,
+}
+
 
 def _face_show(stop):
     """Keep the LCD alive the whole song — a fast stream of 21 emotional face
@@ -620,5 +632,18 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="MELVINN performs, full-body.")
     ap.add_argument("--no-drive", action="store_true",
                     help="keep the wheels still (desk-safe); the arm carries it")
+    ap.add_argument("--song", default="", metavar="QUERY",
+                    help="perform any track (fetched by YouTube search) "
+                         "instead of the default 'I Am Not A Robot' show")
     args = ap.parse_args()
-    perform(drive=not args.no_drive)
+    if args.song:
+        slug = re.sub(r"[^a-z0-9]+", "_", args.song.lower()).strip("_") or "song"
+        perform(drive=not args.no_drive,
+                source=f"ytsearch1:{args.song}",
+                song_path=os.path.join(MUSIC_DIR, slug + ".mp3"),
+                intro=f"Now performing: {args.song}!",
+                outro="That was the show. Thank you, thank you!",
+                texts=[args.song.upper()[:14], "LET'S GO!", "WOOO!", "DANCE!",
+                       "MELVINN LIVE", "ENCORE!", "01001101"])
+    else:
+        perform(drive=not args.no_drive)

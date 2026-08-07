@@ -14,12 +14,14 @@ What MELVINN can do (Claude brain; the offline brain covers the basics):
   SENSE     how far is the thing ahead? / look for the green object
   MUSIC     play a song / download <song> / stop the music
   VIDEO     download <video> / play it on your face (LCD + speaker)
-  FACE      show an expression (happy/sad/thinking/surprised/sleepy/love),
+  FACE      show an expression (happy/sad/suspicious/mischief/sassy/furious...),
             display text on the screen, screen off
   VOICE     change voice, list voices, sound effects (robot/dalek/monster...),
             animal sounds (bark, meow, howl...)
   SCRIPTS   run the test scripts (arm test, distance monitor, ...)
-  stop      interrupts whatever is running (motors, grab, dance, video)
+  SHOWS     full-body performances: robot show / cash machine / gruntilda /
+            perform <any song>; LCD animations (witch, moon, coins, ...)
+  stop      interrupts whatever is running (motors, grab, dance, video, shows)
 
 Modes:
   python3 robot_code/tests/assistant.py           -> VOICE mode  (mic -> Vosk -> brain)
@@ -816,6 +818,11 @@ SCRIPTS = {
     "camera test":        ("camera_test.py",        False, "capture a test photo"),
     "face styles":        ("face_styles.py",        False, "cycle all LCD face designs on the screen"),
     "face test":          ("face_test.py",          False, "colour fills then eyes on the screen"),
+    # Full-body musical shows (music + LCD show + arm + wheels). Non-
+    # interactive, so they're safe to launch from the voice loop.
+    "robot show":         ("melvinn_performs.py",    False, "the 'I Am Not A Robot' performance"),
+    "cash machine":       ("melvinn_cash_machine.py", False, "the Oliver Tree Cash Machine show"),
+    "gruntilda":          ("melvinn_gruntilda.py",   False, "the Banjo-Kazooie witch show"),
 }
 
 
@@ -855,17 +862,13 @@ def list_scripts() -> str:
             ". Say for example: run the grab test with yellow.")
 
 
-def run_script(name: str, arg: str = "") -> str:
-    """Launch a whitelisted test script in the background. 'stop' kills it."""
-    name = name.strip().lower()
-    if name not in SCRIPTS:
-        return f"I don't have a script called '{name}'. {list_scripts()}"
-    filename, takes_color, _ = SCRIPTS[name]
-    cmd = [sys.executable, os.path.join(TESTS_DIR, filename)]
-    if takes_color and arg:
-        cmd.append(arg)
-
+def _run_child(name: str, cmd: list, label: str) -> str:
+    """Launch a child process in the background, watching for 'stop'. Frees
+    the audio device AND the GPIO/camera first so the child can claim them
+    (the shows play music and drive everything). Shared by run_script and
+    perform_song."""
     def _run() -> str:
+        _stop_media()                # free the ALSA device for the child
         _release_hardware()          # free pins/camera for the child
         log = tempfile.NamedTemporaryFile(
             mode="w+", suffix=".log", delete=False)
@@ -893,8 +896,65 @@ def run_script(name: str, arg: str = "") -> str:
             try: os.remove(log.name)
             except OSError: pass
 
-    label = f"running the {name}" + (f" with {arg}" if takes_color and arg else "")
     return start_action(label, _run)
+
+
+def run_script(name: str, arg: str = "") -> str:
+    """Launch a whitelisted test script in the background. 'stop' kills it."""
+    name = name.strip().lower()
+    if name not in SCRIPTS:
+        return f"I don't have a script called '{name}'. {list_scripts()}"
+    filename, takes_color, _ = SCRIPTS[name]
+    cmd = [sys.executable, os.path.join(TESTS_DIR, filename)]
+    if takes_color and arg:
+        cmd.append(arg)
+    label = f"running the {name}" + (f" with {arg}" if takes_color and arg else "")
+    return _run_child(name, cmd, label)
+
+
+def perform_song(query: str = "") -> str:
+    """Full-body musical performance (music + LCD show + arm + wheels) in a
+    child process. Empty query = the signature 'I Am Not A Robot' show; any
+    other query is fetched by YouTube search and performed with the generic
+    show. 'stop' ends it."""
+    cmd = [sys.executable, os.path.join(TESTS_DIR, "melvinn_performs.py")]
+    name = "robot show"
+    if query.strip():
+        cmd += ["--song", query.strip()]
+        name = f"{query.strip()} performance"
+    return _run_child(name, cmd, f"performing the {name}")
+
+
+# Names the play_animation tool accepts (kept in sync with ANIM_NAMES in
+# melvinn_performs.py + melvinn_cash_machine.py — play_anim.py validates too).
+ANIMATIONS = ("moon", "witch", "ghost", "bat", "spell", "starfield",
+              "look around", "eye roll", "pulse", "wobble", "color flash",
+              "hearts", "zzz", "laugh", "cry", "rage", "swoon", "shock",
+              "dollar", "coins", "money bag", "cash rain", "oliver tree")
+
+
+def play_animation(name: str) -> str:
+    """Play one named LCD animation, briefly, via a child process.
+
+    The animation code lives in the show modules (melvinn_performs /
+    melvinn_cash_machine), which import THIS file — importing them back into
+    a running assistant would create a second module instance fighting this
+    one for the LCD pins. So a short child process owns the screen instead
+    (same hand-off as play_video and the face scripts)."""
+    name = name.strip().lower()
+    if name not in ANIMATIONS:
+        return "I have these animations: " + ", ".join(ANIMATIONS) + "."
+    _release_face()                  # hand the LCD to the child
+    try:
+        r = subprocess.run(
+            [sys.executable, os.path.join(TESTS_DIR, "play_anim.py"), name],
+            cwd=TESTS_DIR, capture_output=True, text=True, timeout=45)
+    except subprocess.TimeoutExpired:
+        return "The animation timed out."
+    if r.returncode != 0:
+        tail = (r.stderr or r.stdout or "").strip().splitlines()
+        return f"Animation failed: {tail[-1] if tail else 'no output'}"
+    return f"Played the {name} animation!"
 
 
 def grab_all(color: str = "red", max_objects: int = 3) -> str:
@@ -1311,6 +1371,22 @@ _EXPRESSIONS = {
     "sleepy":    dict(openness=0.22, zzz=True),
     "love":      dict(hearts=True, mouth="smile"),
     "angry":     dict(openness=0.8, color=WARM, brow=14),
+    # Extended moods (born in the performance shows, promoted here so they
+    # work by voice too — "look suspicious"). melvinn_performs reuses this
+    # table for its face show.
+    "excited":    dict(openness=1.35, mouth="smile", color=(120, 255, 180)),
+    "joyful":     dict(openness=1.15, mouth="smile", color=(255, 230, 80)),
+    "smitten":    dict(hearts=True, tilt=8),
+    "shocked":    dict(openness=1.45, mouth="o", pupil_dy=-3),
+    "furious":    dict(openness=0.7, color=(255, 60, 30), brow=22, mouth="frown"),
+    "worried":    dict(openness=0.8, brow=-12, mouth="frown", pupil_dy=6),
+    "suspicious": dict(openness=0.5, pupil_dx=16, brow=8),
+    "mischief":   dict(openness=0.85, pupil_dx=-14, brow=10, mouth="smile", tilt=6),
+    "cool":       dict(openness=0.5, color=(255, 230, 80), mouth="smile"),
+    "playful":    dict(openness=1.1, mouth="smile", pupil_dx=12, tilt=-6),
+    "sassy":      dict(openness=0.6, pupil_dx=18, tilt=8, mouth="smile"),
+    "proud":      dict(openness=1.0, brow=-6, mouth="smile", color=(255, 215, 0)),
+    "bored":      dict(openness=0.45, pupil_dy=8),
 }
 
 
@@ -1803,16 +1879,47 @@ TOOLS = [
                        "greeting or succeeding, thinking while working on a "
                        "multi-step task, surprised at the unexpected, sad on "
                        "failure, love for compliments, sleepy before shutting "
-                       "down, blink for a quick blink.",
+                       "down, blink for a quick blink — plus the extended "
+                       "moods (excited, furious, suspicious, mischief, sassy, "
+                       "proud, bored...) whenever they fit better.",
         "input_schema": {
             "type": "object",
             "properties": {
+                # enum built from the table so new moods appear automatically
                 "expression": {"type": "string",
-                               "enum": ["happy", "neutral", "sad", "angry",
-                                        "thinking", "surprised", "sleepy",
-                                        "love", "blink"]},
+                               "enum": list(_EXPRESSIONS) + ["blink"]},
             },
             "required": ["expression"],
+        },
+    },
+    {
+        "name": "play_animation",
+        "description": "Play a short animation on the LCD face screen: little "
+                       "scenes (moon, witch, ghost, bat, spell, starfield, "
+                       "coins, money bag, cash rain, dollar, oliver tree) and "
+                       "eye moods (laugh, cry, rage, swoon, shock, hearts, "
+                       "eye roll...). Use when asked to show or draw one of "
+                       "them, or as a flourish on your own judgment.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"name": {"type": "string",
+                                    "enum": list(ANIMATIONS)}},
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "perform_song",
+        "description": "Put on a full-body musical performance: the song "
+                       "plays while the LCD runs its animated show and the "
+                       "arm and wheels dance. Empty query = the signature "
+                       "'I Am Not A Robot' show; otherwise any song, fetched "
+                       "by search (e.g. 'Uptown Funk'). The wheels move, so "
+                       "MELVINN needs floor space. 'stop' ends the show. For "
+                       "the dedicated themed shows use run_script instead "
+                       "(cash machine, gruntilda, robot show).",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
         },
     },
     {
@@ -1966,6 +2073,10 @@ def run_tool(name: str, tool_input: dict) -> str:
         return run_script(tool_input["name"], tool_input.get("arg", ""))
     if name == "list_scripts":
         return list_scripts()
+    if name == "perform_song":
+        return perform_song(tool_input.get("query", ""))
+    if name == "play_animation":
+        return play_animation(tool_input["name"])
     if name == "set_face":
         return set_face(tool_input["expression"])
     if name == "show_text":
@@ -2365,14 +2476,31 @@ def local_brain(user_text: str) -> str:
                 return set_voice(v)
         return list_voices()
 
-    # run a whitelisted test script ("run the grab test with yellow")
-    if any(w in t for w in ("run", "launch", "start the")):
+    # run a whitelisted test script ("run the grab test with yellow") or a
+    # show by name ("perform cash machine", "do the gruntilda show")
+    if any(w in t for w in ("run", "launch", "start the", "perform", "do the")):
         for s in SCRIPTS:
             if s in t or s.replace(" ", "") in t.replace(" ", ""):
                 color = next((c for c in ("red", "green", "blue", "yellow") if c in t), "")
                 return run_script(s, color)
         if "script" in t or "test" in t:
             return list_scripts()
+
+    # perform any song ("perform uptown funk")
+    if "perform" in t:
+        q = t
+        for w in ("perform", "please", "the song", "a song", "song", "for me"):
+            q = q.replace(w, "")
+        q = q.strip(" ,.!?")
+        return perform_song("" if not q or "robot" in q else q)
+
+    # one LCD animation ("play the witch animation", "show me the moon")
+    if "animation" in t or "show me the" in t:
+        for a in ANIMATIONS:
+            if a in t:
+                return play_animation(a)
+        if "animation" in t:
+            return "Which animation? I have: " + ", ".join(ANIMATIONS) + "."
 
     if "script" in t and ("list" in t or "what" in t or "which" in t):
         return list_scripts()
