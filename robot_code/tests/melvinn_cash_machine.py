@@ -35,8 +35,11 @@ TEXTS = ["CASH MACHINE", "KA-CHING!", "$$$", "MONEY!", "GET PAID", "CA$H",
          "MO MONEY", "BRRR!", "OLIVER TREE", "CASH OUT", "01001101", "WOO!"]
 
 # --- money-themed picture animations ----------------------------------------
-GREEN = (60, 200, 90)
-GOLD  = (255, 205, 60)
+GREEN  = (60, 200, 90)
+GOLD   = (255, 205, 60)
+SKIN   = (240, 200, 165)
+HAIR   = (95, 60, 32)     # brown bowl cut
+HOODIE = (225, 95, 70)    # baggy bold hoodie
 
 
 def _font(size):
@@ -136,7 +139,59 @@ def _anim_cashrain(stop):           # dollar bills fluttering down
             return
 
 
-MONEY_ANIMS = [_anim_dollar, _anim_coins, _anim_moneybag, _anim_cashrain]
+# --- pixel-art Oliver Tree (bowl cut + big mustache + hoodie) ---------------
+OLIVER = [
+    "....HHHHHH....",
+    "..HHHHHHHHHH..",
+    ".HHHHHHHHHHHH.",
+    "HHHHHHHHHHHHHH",
+    "HHHHHHHHHHHHHH",
+    "HHSSSSSSSSSSHH",
+    ".SSSSSSSSSSSS.",
+    ".SSKSSSSSSKSS.",
+    ".SSSSSSSSSSSS.",
+    ".SKKKKKKKKKKS.",
+    ".SSKKKKKKKKSS.",
+    ".SSSSSSSSSSSS.",
+    "..SSSSSSSSSS..",
+    "...CCCCCCCC...",
+    ".CCCCCCCCCCCC.",
+    "CCCCCCCCCCCCCC",
+]
+OCMAP = {"H": HAIR, "S": SKIN, "K": (20, 20, 20), "C": HOODIE}
+
+
+def _sprite(d, rows, cmap, x, y, px, gap=1):
+    """Draw a pixel-art sprite centred at (x, y); each cell is a px block with a
+    1 px gap so it reads as distinct 'pixels' on the dot-matrix panel."""
+    h, w = len(rows), len(rows[0])
+    ox, oy = x - w*px//2, y - h*px//2
+    for r, row in enumerate(rows):
+        for c, ch in enumerate(row):
+            col = cmap.get(ch)
+            if col:
+                gx, gy = ox + c*px, oy + r*px
+                d.rectangle((gx, gy, gx+px-1-gap, gy+px-1-gap), fill=col)
+
+
+def _anim_oliver(stop):             # pixel-art Oliver Tree bops across
+    f0, _, _ = _canvas()
+    if not f0:
+        return
+    W, H = f0.width, f0.height
+    for i, x in enumerate(range(-30, W + 40, 22)):
+        f, img, d = _canvas()
+        if not f:
+            return
+        _sprite(d, OLIVER, OCMAP, x, H//2 + (-3 if i % 2 else 3), 11)
+        f.display(img)
+        _nap(stop, 0.13)
+        if stop.is_set() or not _music_alive():
+            return
+
+
+MONEY_ANIMS = [_anim_dollar, _anim_coins, _anim_moneybag, _anim_cashrain,
+               _anim_oliver]
 
 
 if __name__ == "__main__":
