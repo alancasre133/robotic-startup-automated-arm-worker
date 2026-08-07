@@ -37,12 +37,16 @@ TEXTS = ["CASH MACHINE", "KA-CHING!", "$$$", "MONEY!", "GET PAID", "CA$H",
 # --- money-themed picture animations ----------------------------------------
 GREEN  = (60, 200, 90)
 GOLD   = (255, 205, 60)
+# Oliver Tree album-cover palette
 SKIN   = (240, 200, 165)
-HAIR   = (95, 60, 32)      # brown bowl cut
-GLASS  = (250, 190, 70)    # amber-tinted lenses
-WB1    = (40, 170, 160)    # windbreaker teal
-WB2    = (225, 70, 140)    # windbreaker magenta block
-WBW    = (235, 235, 240)   # windbreaker white accents
+AUBURN = (150, 78, 40)     # coppery bowl cut
+AUBURN2= (110, 52, 28)     # fringe underside
+SHAVE  = (205, 170, 140)   # shaved undercut sides
+RED    = (230, 40, 35)     # glasses frames
+BLUE   = (65, 110, 230)    # tinted lenses
+PURPLE = (115, 65, 195)    # windbreaker
+PINK   = (235, 60, 140)    # chest panel
+YELLOW = (245, 210, 60)    # collar
 
 
 def _font(size):
@@ -143,31 +147,35 @@ def _anim_cashrain(stop):           # dollar bills fluttering down
 
 
 # --- pixel-art Oliver Tree (bowl cut + big mustache + hoodie) ---------------
+# Matched to the album cover: big rounded auburn bowl cut over a shaved
+# undercut, red-frame wraparound glasses with blue tinted lenses, pouty frown
+# (no mustache), purple windbreaker with the pink chest panel + yellow collar.
 OLIVER = [
-    ".....HHHHHH.....",   # bowl cut
-    "...HHHHHHHHHH...",
-    "..HHHHHHHHHHHH..",
-    ".HHHHHHHHHHHHHH.",
-    "HHHHHHHHHHHHHHHH",
-    "HHHHHHHHHHHHHHHH",
-    "HHSSSSSSSSSSSSHH",   # forehead + sideburns
-    "SSKKKKSKKSKKKKSS",   # glasses: frames + bridge
-    "SSKGGKSSSSKGGKSS",   # amber lenses
-    "SSKKKKSSSSKKKKSS",   # glasses bottom
-    ".SSSSSSSSSSSSSS.",
-    ".SKKKKKKKKKKKKS.",   # big mustache
-    ".SSKKKKKKKKKKSS.",
-    "..SSSSSSSSSSSS..",   # chin
-    "...SSSSSSSSSS...",
-    "....CCCCCCCC....",   # windbreaker collar
-    "..WWCCCCCCCCWW..",   # shoulders (white accents)
-    ".CCCCDDDDDDCCCC.",   # color-blocked chest
-    ".CCCCDDDDDDCCCC.",
-    ".CCCCCCCCCCCCCC.",
-    "CCCCCCCCCCCCCCCC",   # baggy hem
+    "......HHHHHH......",   # big rounded bowl
+    "....HHHHHHHHHH....",
+    "...HHHHHHHHHHHH...",
+    "..HHHHHHHHHHHHHH..",
+    ".HHHHHHHHHHHHHHHH.",
+    ".HHHHHHHHHHHHHHHH.",
+    ".HHHHHHHHHHHHHHHH.",
+    ".hhhhhhhhhhhhhhhh.",   # straight fringe underside
+    "..USSSSSSSSSSSSU..",   # shaved undercut sides
+    ".RRRRRRRRRRRRRRRR.",   # glasses: red wraparound top
+    ".RBBBBBRRRRBBBBBR.",   # blue tinted lenses
+    ".RRRRRRRRRRRRRRRR.",   # red frame bottom
+    "..SSSSSSSSSSSSSS..",   # cheeks
+    "..SSSSSKKKKSSSSS..",   # pouty frown
+    "...SSSSSSSSSSSS...",   # chin
+    "....YYYYYYYYYY....",   # yellow collar
+    "..PPYYYYYYYYYYPP..",   # shoulders
+    ".PPPPDDDDDDDDPPPP.",   # purple jacket, pink chest panel
+    ".PPPPDDDDDDDDPPPP.",
+    ".PPPPDDDDDDDDPPPP.",
+    "PPPPPDDDDDDDDPPPPP",
+    "PPPPPPPPPPPPPPPPPP",   # baggy hem
 ]
-OCMAP = {"H": HAIR, "S": SKIN, "K": (20, 20, 20), "G": GLASS,
-         "C": WB1, "D": WB2, "W": WBW}
+OCMAP = {"H": AUBURN, "h": AUBURN2, "S": SKIN, "U": SHAVE, "K": (25, 20, 20),
+         "R": RED, "B": BLUE, "P": PURPLE, "D": PINK, "Y": YELLOW}
 
 
 def _sprite(d, rows, cmap, x, y, px, gap=1):
@@ -201,6 +209,11 @@ def _anim_oliver(stop):             # pixel-art Oliver Tree bops across
 
 MONEY_ANIMS = [_anim_dollar, _anim_coins, _anim_moneybag, _anim_cashrain,
                _anim_oliver]
+
+# For standalone playback (assistant's play_animation tool via play_anim.py).
+ANIM_NAMES = {"dollar": _anim_dollar, "coins": _anim_coins,
+              "money bag": _anim_moneybag, "cash rain": _anim_cashrain,
+              "oliver tree": _anim_oliver}
 
 
 if __name__ == "__main__":
