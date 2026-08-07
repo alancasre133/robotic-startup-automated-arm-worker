@@ -503,6 +503,8 @@ ANIMS = [_anim_look_around, _anim_eye_roll, _anim_pulse, _anim_wobble,
          _anim_moon, _anim_witch, _anim_ghost, _anim_bat, _anim_spell,
          _anim_starfield]
 
+EXTRA_ANIMS = []        # per-song extra picture animations, set by perform()
+
 
 def _face_show(stop):
     """Keep the LCD alive the whole song — a fast stream of 21 emotional face
@@ -523,7 +525,7 @@ def _face_show(stop):
             prev = _pick(names, prev)
             _face_frame(**EMOTIONS[prev])
         else:                                # a multi-frame animation
-            random.choice(ANIMS)(stop)
+            random.choice(ANIMS + EXTRA_ANIMS)(stop)
         _nap(stop, random.uniform(0.22, 0.5))
 
 
@@ -543,11 +545,12 @@ def _rest():
 
 
 def perform(drive=True, source=DEFAULT_SOURCE, song_path=DEFAULT_SONG_PATH,
-            intro=DEFAULT_INTRO, outro=DEFAULT_OUTRO, texts=None):
-    global DRIVE, SCREEN_TEXTS
+            intro=DEFAULT_INTRO, outro=DEFAULT_OUTRO, texts=None, extra_anims=None):
+    global DRIVE, SCREEN_TEXTS, EXTRA_ANIMS
     DRIVE = drive
     if texts:
-        SCREEN_TEXTS = texts        # the LCD thread reads this module global
+        SCREEN_TEXTS = texts        # the LCD thread reads these module globals
+    EXTRA_ANIMS = extra_anims or []
 
     song = ensure_audio(source, song_path)
     if not song:
