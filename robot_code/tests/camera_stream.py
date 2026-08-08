@@ -11,9 +11,24 @@ Then open  http://<pi-ip>:8000  on any device on the same WiFi
 """
 
 import io
+import socket
 import socketserver
 from http import server
 from threading import Condition
+
+
+def _local_ip() -> str:
+    """The Pi's IP on the LAN. Opens a throwaway UDP socket toward a public
+    address to discover which local interface/IP would be used — it sends
+    nothing and needs no internet, it just reads the chosen source IP."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        s.close()
 
 from libcamera import Transform
 from picamera2 import Picamera2
@@ -88,7 +103,14 @@ transform = Transform(hflip=1, vflip=1) if FLIP_180 else Transform()
 picam2.configure(picam2.create_video_configuration(main={"size": (WIDTH, HEIGHT)}, transform=transform))
 output = StreamingOutput()
 picam2.start_recording(JpegEncoder(), FileOutput(output))
-print(f"Streaming on http://<pi-ip>:{PORT}   (Ctrl-C to stop)")
+_ip = _local_ip()
+_host = socket.gethostname()
+print("\n" + "=" * 44)
+print("  Camera stream is live — open in a browser:")
+print(f"    http://{_ip}:{PORT}")
+print(f"    http://{_host}.local:{PORT}")
+print("  (same WiFi as the Pi;  Ctrl-C to stop)")
+print("=" * 44 + "\n")
 
 try:
     StreamingServer(("", PORT), Handler).serve_forever()
