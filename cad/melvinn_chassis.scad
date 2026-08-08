@@ -12,10 +12,18 @@
 //    part = "assembly"    everything together as a preview (DON'T print this)
 //    part = "deck_left" / "deck_right"   lower deck split for small beds
 //
-//  The two levels:
-//    LOWER  – control electronics; power bank zip-tied underneath (low CoG).
-//    UPPER  – the arm (front, reaching out over the top), the USB mic/speaker,
-//             and both NiMH packs (strapped to the tier, hanging into the gap).
+//  WHERE EVERY ELEMENT LIVES (the complete BOM, placed)
+//    Lower deck ....... Pi 3A+, 2x BTS7960, PCA9685 (on standoffs)
+//    Under the belly .. power bank (zip-tied through the belly slots)
+//    Between decks .... USB hub (strapped front-centre; the Pico velcros to
+//                       it), 7.5A inline fuse (zip-tied near the BTS boards),
+//                       all wiring via the pass-through slots
+//    Upper tier ....... arm (front), USB speakerphone (drop-in ring +
+//                       grille), both 6V NiMH packs (straps, hang into gap)
+//    Face plate ....... HC-SR04 (top), LCD (centre), IMX219 camera (beside
+//                       the LCD). The Echo divider resistors live inline in
+//                       the harness — no mount needed.
+//    Corners .......... 4x JGA25 motors on 25 mm brackets + 65 mm wheels
 //    The tier stands on 4 posts that bolt down through the lower deck.
 //
 //  ⚠️  DIMENSIONS ARE A STARTING TEMPLATE, NOT A GUARANTEED FIT.
@@ -101,11 +109,21 @@ nimh_drive_pos=[6,  50];
 nimh_servo_pos=[6, -50];
 
 // --- front FACE PLATE ---
-face_h   = 62;
+// Heights chosen so nothing collides: LCD window spans 9.6-50.4, sonar holes
+// span 57-73 (6.6 mm bridge between them), base bolts at 8 sit outboard of
+// the window (y +/-40 vs window +/-15.3).
+face_h   = 78;
 face_w   = 100;
 lcd_win  = [30.6, 40.8];   // 2.0" visible area                  // MEASURE
+lcd_z    = 30;             // window CENTRE height (not face_h/2 — the sonar
+                           // row needs the strip above it)
 hcsr_dia = 16;             // ultrasonic transducer can
 hcsr_sep = 26;             // centre-to-centre of the two cans    // MEASURE
+// IMX219 camera, beside the LCD (can't sit between the sonar cans — the
+// HC-SR04 board occupies the panel behind that strip)
+cam_y    = 30;             // camera centre offset from the face middle
+cam_lens = 10;             // lens clearance hole
+cam_hole = [12.5, 21];     // M2 mount pattern (RPi cam v2)       // MEASURE
 
 /* [Split] */
 split_enable = false;      // add seam dowel holes to the whole deck too
@@ -182,6 +200,16 @@ module wire_slots() {
     slot([ 20,-26], 40, 10);   // to BTS7960 R / right motors
 }
 
+module hub_slots() {           // strap the USB hub down, front-centre (it
+    slot([74, 0], 5, 30);      // rides in the deck-to-tier gap; the Pico
+    slot([90, 0], 5, 30);      // velcros to the hub). Zip tie through both.
+}
+
+module fuse_slots() {          // zip-tie the 7.5A inline fuse holder where
+    slot([56, 0], 4, 14);      // the B+ line runs between the two BTS7960s
+    slot([66, 0], 4, 14);
+}
+
 module seam_dowels() {               // 4 mm pins align the two split halves
     for (sy=[-1,1])
         translate([-12, sy*45, deck_thick/2]) rotate([0,90,0])
@@ -205,6 +233,8 @@ module deck() {
         tier_post_holes();      // the upper tier bolts down here
         pbank_belly_slots();    // power bank straps to the underside
         wire_slots();
+        hub_slots();            // USB hub straps here (Pico velcros to it)
+        fuse_slots();           // 7.5A inline fuse zip-ties here
         if (split_enable || part == "deck_left" || part == "deck_right")
             seam_dowels();
     }
@@ -263,11 +293,18 @@ module upper_tier() {
 module face_plate() {
     difference() {
         translate([0, -face_w/2, 0]) cube([wall_t, face_w, face_h]);
-        translate([-1, -lcd_win[0]/2, face_h/2 - lcd_win[1]/2])
+        translate([-1, -lcd_win[0]/2, lcd_z - lcd_win[1]/2])
             cube([wall_t+2, lcd_win[0], lcd_win[1]]);
         for (sy=[-1,1])
             translate([-1, sy*hcsr_sep/2, face_h-13]) rotate([0,90,0])
                 cylinder(h=wall_t+2, d=hcsr_dia);
+        // IMX219 camera beside the LCD: lens hole + M2 mount pattern
+        translate([-1, cam_y, lcd_z]) rotate([0,90,0])
+            cylinder(h=wall_t+2, d=cam_lens);
+        for (sy=[-1,1], sz=[-1,1])
+            translate([-1, cam_y + sy*cam_hole[0]/2,
+                       lcd_z + sz*cam_hole[1]/2]) rotate([0,90,0])
+                cylinder(h=wall_t+2, d=2.4);
         for (sy=[-1,1])
             translate([-1, sy*(face_w/2-10), 8]) rotate([0,90,0])
                 cylinder(h=wall_t+2, d=m3_clear);
@@ -321,12 +358,16 @@ module robot() {
                 rotate([0, 90, 0]) cylinder(h=14, d=hcsr_dia - 2);
     // LCD: dark panel + two cyan grid eyes
     color("#0a1020")
-        translate([deck_len/2 + 0.6, -lcd_win[0]/2, deck_thick + face_h/2 - lcd_win[1]/2])
+        translate([deck_len/2 + 0.6, -lcd_win[0]/2, deck_thick + lcd_z - lcd_win[1]/2])
             cube([1, lcd_win[0], lcd_win[1]]);
     for (sy=[-1, 1])
         color("#37c8ff")
-            translate([deck_len/2 + 1.4, sy*8 - 4.5, deck_thick + face_h/2 - 5])
+            translate([deck_len/2 + 1.4, sy*8 - 4.5, deck_thick + lcd_z - 5])
                 cube([0.8, 9, 12]);
+    // camera lens beside the LCD
+    color("#101014")
+        translate([deck_len/2 - 1, cam_y, deck_thick + lcd_z])
+            rotate([0, 90, 0]) cylinder(h=wall_t + 3, d=cam_lens + 3);
     // the arm, on the tier mount: base joint, vertical upper arm, folded
     // forearm, wrist + gripper fingers
     tier_top = deck_thick + tier_h + deck_thick;
