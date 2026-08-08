@@ -28,7 +28,7 @@
 // ===========================================================================
 
 /* [What to render] */
-part = "assembly"; // [deck, tray, upper_tier, face_plate, assembly, deck_left, deck_right]
+part = "assembly"; // [deck, tray, upper_tier, face_plate, assembly, robot, deck_left, deck_right]
 
 /* [Quality] */
 $fn = 48;
@@ -298,6 +298,57 @@ module assembly() {
 }
 
 // ===========================================================================
+//  ROBOT PREVIEW — the whole MELVINN: chassis + wheels + arm + glowing face.
+//  Visual only (part = "robot"), never printed. Arm shown in its safe pose:
+//  shoulder straight up, elbow folded, gripper at the top.
+// ===========================================================================
+module wheel() {
+    rotate([90, 0, 0]) {
+        color("#15171c") cylinder(h=27, d=65, center=true);      // 65 mm hex wheel
+        color("#3a7bd5") cylinder(h=27.6, d=28, center=true);    // hub
+    }
+}
+
+module robot() {
+    assembly();
+    // wheels — outboard of the deck at axle height
+    for (sx=[-1, 1], sy=[-1, 1])
+        translate([sx*wheel_x, sy*(deck_wid/2 + 16), 0]) wheel();
+    // ultrasonic "eyes" poking through the face plate
+    for (sy=[-1, 1])
+        color("silver")
+            translate([deck_len/2 - 6, sy*hcsr_sep/2, deck_thick + face_h - 13])
+                rotate([0, 90, 0]) cylinder(h=14, d=hcsr_dia - 2);
+    // LCD: dark panel + two cyan grid eyes
+    color("#0a1020")
+        translate([deck_len/2 + 0.6, -lcd_win[0]/2, deck_thick + face_h/2 - lcd_win[1]/2])
+            cube([1, lcd_win[0], lcd_win[1]]);
+    for (sy=[-1, 1])
+        color("#37c8ff")
+            translate([deck_len/2 + 1.4, sy*8 - 4.5, deck_thick + face_h/2 - 5])
+                cube([0.8, 9, 12]);
+    // the arm, on the tier mount: base joint, vertical upper arm, folded
+    // forearm, wrist + gripper fingers
+    tier_top = deck_thick + tier_h + deck_thick;
+    translate([arm_pos[0], arm_pos[1], tier_top + post_h]) {
+        color("#4a5568") cylinder(h=38, d=36);
+        translate([0, 0, 38]) {
+            color("#c9d1d9") translate([-9, -9, 0]) cube([18, 18, 95]);
+            translate([0, 0, 95]) rotate([0, 30, 0]) {
+                color("#3a7bd5") sphere(d=24);
+                color("#aab2bd") translate([-8, -8, 0]) cube([16, 16, 80]);
+                translate([0, 0, 80]) {
+                    color("#3a7bd5") cylinder(h=18, d=20);
+                    for (gy=[-1, 1])
+                        color("#e23b3b")
+                            translate([-6, gy*12 - 3, 18]) cube([12, 6, 30]);
+                }
+            }
+        }
+    }
+}
+
+// ===========================================================================
 //  RENDER SELECTOR
 // ===========================================================================
 if      (part == "deck")        deck();
@@ -305,6 +356,7 @@ else if (part == "tray")        tray();
 else if (part == "upper_tier")  upper_tier();
 else if (part == "face_plate")  face_plate();
 else if (part == "assembly")    assembly();
+else if (part == "robot")       robot();
 else if (part == "deck_left")
     intersection() {
         deck();
