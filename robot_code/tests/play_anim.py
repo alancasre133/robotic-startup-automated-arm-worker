@@ -13,8 +13,9 @@ import sys
 
 import melvinn_performs as mp
 import melvinn_cash_machine as mc
+import melvinn_alien_boy as ma
 
-REGISTRY = {**mp.ANIM_NAMES, **mc.ANIM_NAMES}
+REGISTRY = {**mp.ANIM_NAMES, **mc.ANIM_NAMES, **ma.ANIM_NAMES}
 
 name = " ".join(sys.argv[1:]).strip().lower()
 fn = REGISTRY.get(name)

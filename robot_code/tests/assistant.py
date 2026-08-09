@@ -823,6 +823,7 @@ SCRIPTS = {
     "robot show":         ("melvinn_performs.py",    False, "the 'I Am Not A Robot' performance"),
     "cash machine":       ("melvinn_cash_machine.py", False, "the Oliver Tree Cash Machine show"),
     "gruntilda":          ("melvinn_gruntilda.py",   False, "the Banjo-Kazooie witch show"),
+    "alien boy":          ("melvinn_alien_boy.py",   False, "the Oliver Tree Alien Boy show"),
 }
 
 
@@ -930,7 +931,8 @@ def perform_song(query: str = "") -> str:
 ANIMATIONS = ("moon", "witch", "ghost", "bat", "spell", "starfield",
               "look around", "eye roll", "pulse", "wobble", "color flash",
               "hearts", "zzz", "laugh", "cry", "rage", "swoon", "shock",
-              "dollar", "coins", "money bag", "cash rain", "oliver tree")
+              "dollar", "coins", "money bag", "cash rain", "oliver tree",
+              "ufo", "alien", "abduction", "planet")
 
 
 def play_animation(name: str) -> str:
