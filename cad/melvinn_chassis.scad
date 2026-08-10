@@ -74,7 +74,14 @@ motor_integrated = false;  // false = bolt holes for the kit's 25 mm brackets
 motor_dia       = 25;      // JGA25 gearbox diameter
 wheel_x         = 65;      // axle offset from centre, X   // MEASURE
 wheel_y         = 68;      // half-track, Y                // MEASURE
-bracket_bolt_dx = 18;      // bracket bolt spacing (along axle)  // MEASURE
+// The real bracket (Pololu-25D-style L "Duinar" clone, bought 2026-07-24) has
+// a 2x2 base-hole pattern, not 2 holes. Modeled as SLOTS so a few mm of
+// clone-to-spec drift still bolts on. Measure the real base and set:
+bracket_bolt_dx = 16;      // hole spacing ALONG the axle        // MEASURE
+bracket_bolt_dy = 18;      // hole-row spacing ACROSS the axle   // MEASURE
+bracket_inset   = 6;       // bracket base centre sits this far inboard of
+                           // the axle line (keeps the outer row on the deck)
+bracket_slot_l  = 7;       // slot length along the axle (error absorber)
 bracket_bolt_d  = 3.4;     // M3
 
 // ---------------------------------------------------------------------------
@@ -164,12 +171,17 @@ module slot(pos, l, w) {
 // ===========================================================================
 //  SHARED FEATURES
 // ===========================================================================
-module motor_bolt_holes() {          // holes for the 25 mm clamp brackets
+module motor_bolt_holes() {
+    // 2x2 slotted pattern per bracket, matching the L-bracket's base. The
+    // pattern centre sits `bracket_inset` inboard of the axle line so the
+    // outer hole row stays on the deck.
     for (sx=[-1,1], sy=[-1,1])
-        translate([sx*wheel_x, sy*wheel_y, -1])
-            for (bx=[-1,1])
-                translate([bx*bracket_bolt_dx/2, 0, 0])
-                    cylinder(h=deck_thick+2, d=bracket_bolt_d);
+        translate([sx*wheel_x, sy*(wheel_y - bracket_inset), 0])
+            for (bx=[-1,1], by=[-1,1])
+                translate([bx*bracket_bolt_dx/2, by*bracket_bolt_dy/2, -1])
+                    linear_extrude(deck_thick+2)
+                        rrect(bracket_slot_l, bracket_bolt_d,
+                              bracket_bolt_d/2 - 0.05);
 }
 
 module motor_clamps() {              // optional integrated 25 mm saddles
