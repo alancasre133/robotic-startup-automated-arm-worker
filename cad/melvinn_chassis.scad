@@ -399,7 +399,7 @@ module robot() {
     // the arm, on the tier mount: base joint, vertical upper arm, folded
     // forearm, wrist + gripper fingers
     tier_top = deck_thick + tier_h + deck_thick;
-    translate([arm_pos[0], arm_pos[1], tier_top + post_h]) {
+    translate([arm_pos[0], arm_pos[1], tier_top]) {   // flat mount, no standoffs
         color("#4a5568") cylinder(h=38, d=36);
         translate([0, 0, 38]) {
             color("#c9d1d9") translate([-9, -9, 0]) cube([18, 18, 95]);
