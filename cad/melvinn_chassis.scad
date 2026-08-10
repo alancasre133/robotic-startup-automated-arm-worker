@@ -63,8 +63,9 @@ wall_t = 2.4;
 tier_h      = 60;   // gap between the two decks (must clear the batteries)
 tier_post_d = 10;
 tier_screw  = 3.4;  // M3
-tier_post_x = 72;   // support-post positions (clear of the wheels)
-tier_post_y = 48;
+tier_post_x = 90;   // support posts in the deck's rounded corners — far from
+tier_post_y = 66;   // the motor-bracket slot zone (x 53-77, y 53-71) so a
+                    // bracket flange and a post screw never fight for space
 
 // ---------------------------------------------------------------------------
 //  MOTORS / WHEELS  — 4x JGA25-370 on 25 mm clamp brackets, 65 mm hex wheels
@@ -89,7 +90,8 @@ bracket_bolt_d  = 3.4;     // M3
 //  MEASURE every *_hx/_hy that isn't the Pi.
 // ---------------------------------------------------------------------------
 // Raspberry Pi 3A+  — hole pattern EXACT: 58 x 49, M2.5
-pi_l=65;  pi_w=56;  pi_hx=58;   pi_hy=49;   pi_pos=[-52, 33];  pi_rot=0;
+// (x nudged -52 -> -48 to clear the rear-left tier post in the corner)
+pi_l=65;  pi_w=56;  pi_hx=58;   pi_hy=49;   pi_pos=[-48, 33];  pi_rot=0;
 
 // BTS7960 (IBT-2) H-bridge  x2                                   // MEASURE
 bts_l=50; bts_w=50; bts_hx=43;  bts_hy=43;
