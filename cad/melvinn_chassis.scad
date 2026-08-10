@@ -106,8 +106,15 @@ pbank=[150, 74, 25]; pbank_pos=[0, 0];
 // ---------------------------------------------------------------------------
 //  SECOND-LEVEL COMPONENTS  (on / under the upper tier)
 // ---------------------------------------------------------------------------
-// 6-DOF arm base — on the TIER, at the front, so it reaches out over the top
-arm_hx=40; arm_hy=40; arm_bolt=m3_clear; arm_pos=[48, 0]; arm_rot=0;  // MEASURE
+// 6-DOF arm — mounts by its FLAT rigid-support base plate bolted straight
+// down to the tier (the kit's own base design: servo bracket on the flat
+// plate, no turntable bearing — confirmed from the kit photos). Bolts pass
+// through the plate's hole grid into SLOTS below, so the grid position
+// doesn't need to be exact.
+arm_pos=[48, 0]; arm_rot=0;
+arm_foot=[32, 32];         // bolt-square the slots span            // MEASURE
+arm_slot_l=10;             // slot length (x) — absorbs grid drift
+arm_bolt=m3_clear;
 
 // USB speakerphone (the "mic") — round puck on the tier, with a sound grille
 mic_dia=90; mic_pos=[-46, 0];                                    // MEASURE
@@ -276,7 +283,6 @@ module upper_tier() {
     translate([0, 0, tier_h]) difference() {
         union() {
             plate(deck_len, deck_wid, deck_thick, deck_fillet);
-            mount(arm_pos, arm_rot, arm_hx, arm_hy, arm_bolt);   // arm base
             // mic retaining ring (the puck drops into it)
             translate([mic_pos[0], mic_pos[1], deck_thick])
                 difference() {
@@ -284,6 +290,14 @@ module upper_tier() {
                     translate([0,0,-0.5]) cylinder(h=5, d=mic_dia);
                 }
         }
+        // arm base-plate bolt slots — the flat rigid-support plate bolts
+        // DIRECTLY onto the tier surface (no standoffs); slots absorb the
+        // plate's hole-grid position
+        for (bx=[-1,1], by=[-1,1])
+            translate([arm_pos[0]+bx*arm_foot[0]/2,
+                       arm_pos[1]+by*arm_foot[1]/2, -1])
+                linear_extrude(deck_thick+2)
+                    rrect(arm_slot_l, arm_bolt, arm_bolt/2-0.05);
         // mic sound / vent grille
         translate([mic_pos[0], mic_pos[1], -1])
             cylinder(h=deck_thick+2, d=mic_dia*0.55);
@@ -342,7 +356,7 @@ module assembly() {
     translate([deck_len/2 - wall_t, 0, deck_thick]) face_plate();
     // second level
     translate([0, 0, deck_thick]) upper_tier();
-    ghost(arm_pos, arm_rot, arm_hx+10, arm_hy+10, 70, tier_top);     // arm
+    ghost(arm_pos, arm_rot, arm_foot[0]+10, arm_foot[1]+10, 70, tier_top);  // arm
     translate([mic_pos[0], mic_pos[1], tier_top]) %cylinder(h=26, d=mic_dia);
     ghost(nimh_drive_pos, 0, nimh[0], nimh[1], nimh[2], deck_thick+tier_h-nimh[2]-2);
     ghost(nimh_servo_pos, 0, nimh[0], nimh[1], nimh[2], deck_thick+tier_h-nimh[2]-2);
